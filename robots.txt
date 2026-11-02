@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://codeexplorer99-hub.github.io/basketverse/sitemap.xml
