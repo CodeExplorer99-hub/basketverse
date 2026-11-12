@@ -1,5 +1,5 @@
 /* generato da tools/build.mjs */
-const CACHE = "basketverse-dev-vmwe1kadj";
+const CACHE = "basketverse-dev-vmwe21vw9";
 const ASSETS = [
   "./index.html",
   "./vendor/three.min.js",
@@ -26,5 +26,20 @@ self.addEventListener("fetch", (e) => {
   // il cache API restituisce 200 intero, Chrome puo' rifiutare di riprodurre.
   // Le passiamo direttamente alla rete cosi' il server risponde correttamente.
   if (e.request.headers.get("range")) return;
+  // La PAGINA DEL GIOCO (index.html) va presa PRIMA DALLA RETE: con la cache
+  // davanti, dopo ogni aggiornamento del sito il telefono apriva ancora la
+  // versione vecchia e quella nuova arrivava solo all'apertura successiva.
+  // Senza rete (offline) si ripiega sulla copia in cache.
+  const url = new URL(e.request.url);
+  const isPage = e.request.mode === "navigate" || url.pathname.endsWith("/index.html");
+  if (isPage) {
+    e.respondWith(fetch(e.request.url, { cache: "no-cache" })
+      .then((res) => {
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put("./index.html", copy)); }
+        return res;
+      })
+      .catch(() => caches.match("./index.html")));
+    return;
+  }
   e.respondWith(caches.match(e.request).then((hit) => hit || fetch(e.request)));
 });

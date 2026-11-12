@@ -1606,7 +1606,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwe1kaas";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwe21vrh";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -2172,9 +2172,9 @@ const game = {
 const OWNED_KEY = "basketverse.owned.v1";
 const OWNED_FLAGS = {};
 function loadOwnedPrizes() {
-  let data = null;
+  let data;
   try { data = JSON.parse(localStorage.getItem(OWNED_KEY) || "{}"); }
-  catch (e) { data = null; }               // storage assente/illeggibile: resta di sessione
+  catch (e) { return; }                     // storage assente/illeggibile: resta di sessione
   if (!data || typeof data !== "object") return;
   for (const key in OWNED_FLAGS) {
     if (data[key]) game[OWNED_FLAGS[key]] = true;
@@ -2531,7 +2531,7 @@ window.stats = function () {
 // sulla palla lo è.
 //
 // Eventi agganciati finora:
-//   - presa della palla (09-input, onDown) → vibrazione leggera di 0,5 s
+//   - presa della palla (09-input, onDown) → tick minimo (12 ms)
 // ═══════════════════════════════════════════════════════════════════════════════
 const Haptics = (() => {
   const STORE_KEY = "bv.haptics";          // "0" = spente (per il futuro interruttore)
@@ -2541,7 +2541,12 @@ const Haptics = (() => {
   try { enabled = localStorage.getItem(STORE_KEY) !== "0"; } catch (_) { /* storage bloccato */ }
 
   // Durate standard (ms): usare queste invece di numeri sparsi.
-  const GRAB_MS = 500;                      // presa della palla: leggera, mezzo secondo
+  // STILE APTICO DEL GIOCO: "tick" minimo, leggero e brevissimo, come il clic che
+  // si sente bloccando un iPhone — mai vibrazioni lunghe tipo notifica. Il web non
+  // permette di regolare l'intensità: la leggerezza si ottiene solo con la durata
+  // brevissima (il motorino non fa in tempo ad andare a pieno regime).
+  const TICK_MS = 12;                       // tick base dello stile aptico
+  const GRAB_MS = TICK_MS;                  // presa della palla
 
   function vibrate(arg) {
     if (!supported || !enabled) return false;
@@ -2549,6 +2554,7 @@ const Haptics = (() => {
   }
 
   return {
+    TICK_MS,
     GRAB_MS,
     get supported() { return supported; },
     get enabled() { return enabled; },
@@ -4324,7 +4330,7 @@ window.addEventListener("load", () => setTimeout(onViewResize, 300));
 const GpuLife = (function () {
   const cv = renderer.domElement;
   let lost = false;
-  const lostFns = [], restoreFns = [];
+  const restoreFns = [];
   /* render target col contenuto disegnato una volta:
      { rt, redo, owner, resident, stale }
      owner = modulo del livello che l'ha creato (null = palestra/globale,
@@ -4370,9 +4376,6 @@ const GpuLife = (function () {
     };
     tracked.push(e);
     return e;
-  }
-  function untrack(rt) {
-    for (let i = tracked.length - 1; i >= 0; i--) if (tracked[i].rt === rt) tracked.splice(i, 1);
   }
   function redo(e) {
     if (lost) return;
@@ -4487,7 +4490,6 @@ const GpuLife = (function () {
     lost = true;
     for (const e of tracked) e.stale = true;
     console.warn("BasketVerse: contesto grafico perso, gioco in pausa");
-    lostFns.forEach((fn) => safe(fn, "pausa"));
   }, false);
 
   /* three registra il suo listener nel costruttore del renderer (prima di
@@ -4522,8 +4524,7 @@ const GpuLife = (function () {
   };
 
   return {
-    track, untrack, release, restore, releaseObjects, copyTarget,
-    onLost(fn) { lostFns.push(fn); },
+    track, release, restore, releaseObjects, copyTarget,
     onRestore(fn) { restoreFns.push(fn); },
     get lost() { return lost; }
   };
@@ -6228,7 +6229,7 @@ const ExtrudedText = (function () {
     return { group, set, clear };
   }
 
-  return { buildStringGeometry, getMaterial, makeLabel };
+  return { buildStringGeometry, makeLabel };
 })();
 /* ============================================================
    MESSAGGIO 3D — titolo + sottotitolo come LETTERE 3D ESTRUSE
@@ -9297,7 +9298,7 @@ const FireFX = (() => {
     return { group, spawn, update, clear };
   }
 
-  return { flameSheet, flameMaterial, makeEmbers, makeSmoke, NOISE_GLSL };
+  return { flameSheet, makeEmbers, makeSmoke, NOISE_GLSL };
 })();
 /* ============================================================
    MODELLO CONDIVISO: ALIENO SFERICO BAVOSO (dall'immagine vRc2z.jpg)
@@ -10879,7 +10880,7 @@ const InventoryTV = (function () {
   }
 
   return {
-    build, buildGlow, bend, sag, draw, signature,
+    build, buildGlow, sag, draw, signature,
     setOnReady(fn) { onReady = fn; }
   };
 })();
@@ -12458,7 +12459,7 @@ const DragonModel = (function () {
   }
 
   // cono (spina, corno corto) con la base in pos e la punta lungo dir
-  const _q = new T.Quaternion(), _m = new T.Matrix4(), _one = V(1, 1, 1), _s3 = V();
+  const _q = new T.Quaternion(), _m = new T.Matrix4(), _s3 = V();
   function coneGeo(pos, dir, r, h, flat) {
     const geo = new T.ConeGeometry(r, h, 6).translate(0, h / 2, 0);
     _q.setFromUnitVectors(_up, _s3.copy(dir).normalize());
@@ -19338,7 +19339,7 @@ function onDown(e) {
     drag.grabT = performance.now();   // avvia il lockout iniziale (vedi flickAmount)
     drag.samples = [{ t: drag.grabT, x: p.x, y: p.y }];   // reset dello storico velocità
     if (game.slingshotOn) SlingAim.lockForShot();   // da qui la direzione non cambia più (09d)
-    Haptics.ballGrab();   // vibrazione leggera di mezzo secondo alla presa (01c)
+    Haptics.ballGrab();   // tick aptico minimo alla presa (01c)
     e.preventDefault();
   }
 }
@@ -20810,7 +20811,7 @@ function predictPath(x, y, z, vx, vy, vz, st) {
       vx += mx * dt; vy += my * dt; vz += mz * dt;
       wx *= wAir; wy *= wAir; wz *= wAir;
     }
-    const py = y, pz = z;
+    const py = y;
     x += vx * dt; y += vy * dt; z += vz * dt;
     if (i % PREDICT_SAMPLE_EVERY === 0) predictPts.push(x, y, z);
     // attraversamento del piano dell'anello verso il basso
@@ -24773,7 +24774,6 @@ function loop(now) {
   Quality.frame(now, FRAME_MS);        // qualità ADATTIVA: misura gli FPS veri
   let dt = (now - lastTime) / 1000;
   lastTime = now;
-  const rawDt = dt;                    // gap reale a orologio, PRIMA del clamp
   if (dt > 0.05) dt = 0.05;
   const t = now / 1000;
 
@@ -33366,7 +33366,6 @@ const boatLevel = (function () {
     return _mineGeo;
   }
 
-  let krakenMines = [];              // mine attive nella scena (gestite dall'esterno)
 
   function buildKrakenMine(size) {
     const M = mineMats(), G = mineGeos(), grp = new T.Group();
@@ -35027,11 +35026,8 @@ const boatLevel = (function () {
     powerupsBlocked: () => finale.active && finale.krakenHP <= 0,
     // camera + input della modalità cannone (usati dal loop e da 09-input)
     cameraOverride: cannonCameraOverride, cannonActive, cannonDown, cannonMove, cannonUp,
-    // DEV: avvio/reset manuale della cutscene del polpo (usati dai pulsanti dev).
-    startFinale, resetFinale, krakenHit, enterCannonMode,
-    buildKrakenMine, krakenMines, updateKrakenMines,
-    // mine lanciabili (boss fight)
-    mineState, enterMineMode, exitMineMode, reloadMines };
+    // mina del Kraken riusata dal garage (17-level-garage.js)
+    buildKrakenMine, updateKrakenMines };
 })();
 
 registerLevel(boatLevel);
@@ -40952,7 +40948,6 @@ function buildShopkeeper(opts) {
     cameraOverride: shopCameraOverride,
     tapScreen,
     devOpenPurchase: () => startPurchasePresentation("sling"),  // DEV: presentazione MAZZAFIONDA senza punti
-    devOpenStonePurchase: () => startPurchasePresentation("stone"), // DEV: presentazione PALLA DI PIETRA senza punti
     confirmPurchase, cancelPurchase,              // bottoni Yes/No della schermata d'acquisto
     groundAt, collideBall,
     secretLevel: lairLevel,                       // il covo del livello segreto (16-shop-lair.js)
@@ -41838,7 +41833,7 @@ const ShortCircuit = (function () {
     return true;
   }
 
-  return { play, isRunning: () => !!run };
+  return { play };
 })();
 /* ============================================================
    LIVELLO: IL GARAGE (studio 3D dev-only)
@@ -42953,7 +42948,7 @@ const SpaceGfx = (function () {
 
   return {
     L_SUN, nebulaTexture, gasGiantTexture, rockyTextures, setOctahedralUV, smoothNormals,
-    starMaterial, makePoints, buildStars, ringMaterial, atmosphere, glowSprite,
+    makePoints, buildStars, ringMaterial, atmosphere, glowSprite,
     ufoHullMaps, screenTexture, spaceEnvironment
   };
 })();
@@ -49056,7 +49051,7 @@ const medievalLevel = (function () {
   const CHARGE_T = 1.4, RECOVER_T = 1.0, STUN_T = 1.7, INTRO_T = 1.6, DEAD_T = 4.8, LOSE_T = 3.0;
   // ATTERRAGGIO: ogni LAND_EVERY attacchi si posa a LAND_GAP m da un gruppo e soffia radente
   const LAND_EVERY = 3, LAND_GAP = 13;
-  const TOUCH_T = 2.0, GROUND_T = 8.0, TAKEOFF_T = 2.4, GROUND_BREATH_T = 2.6;
+  const GROUND_T = 8.0, TAKEOFF_T = 2.4, GROUND_BREATH_T = 2.6;
   const FIRE_R = 2.8;                  // m: chi è nel getto a terra brucia
   const BURN_T = 1.3, CORPSE_T = 3.5;  // s in fiamme prima di crollare; s prima che il corpo affondi
   const FLAME_SPEED = 30, FLAME_DRAG = 0.5;        // m/s alla bocca; frenata dell'aria (1/s)
@@ -50180,7 +50175,7 @@ const medievalLevel = (function () {
   // passata: il getto corre da aimA ad aimB sul prato, il drago FIRE_AHEAD m più indietro,
   // alto sopra i soldati; entra da un punto 9 m prima della retta e ne esce dritto
   function planStrafe() {
-    const B = bossArena, D = B.drag;
+    const B = bossArena;
     for (let c = 0; c < 7; c++) {
       const u = pickCluster();
       if (!u) return false;
@@ -52085,8 +52080,7 @@ const medievalLevel = (function () {
    Tutto ciò che le decorazioni dell'hub (21-hub-*.js) hanno in comune:
    - texture cotte UNA volta sulla GPU (05h-gpu-bake): colore, normal e
      roughness vere per fondi, fianchi, legno, pietra, metalli, roccia;
-   - l'environment PMREM dell'hub, coerente con l'interno del palazzetto
-     (quello del vecchio vortice resta in vortexEnvironment);
+   - l'environment PMREM dell'hub, coerente con l'interno del palazzetto;
    - geometrie parametriche con UV in METRI (mai stirate) e normali
      saldate sulla cucitura;
    - particelle interamente nel vertex shader: nessuna allocazione e
@@ -52608,38 +52602,6 @@ const HubKit = (function () {
     return envTex;
   }
 
-  /* Environment del vecchio hub sospeso nel vuoto: gradiente del vortice (gola
-     nera davanti, viola e magenta ai lati) + due lobi morbidi. Va insieme a
-     buildDome di 21-level-hub.js, oggi spento. */
-  let vortexEnvTex = null;
-  function vortexEnvironment() {
-    if (vortexEnvTex) return vortexEnvTex;
-    vortexEnvTex = GpuBake.environment((es) => {
-      const g = new T.SphereGeometry(40, 64, 40);
-      const p = g.attributes.position, col = new Float32Array(p.count * 3);
-      const d = new T.Vector3();
-      const L1 = new T.Vector3(-0.35, 0.8, 0.5).normalize(), L2 = new T.Vector3(0.75, 0.2, -0.5).normalize();
-      const ss = (a, b, x) => K.sstep(a, b, x), mix = (a, b, t) => a + (b - a) * t;
-      for (let i = 0; i < p.count; i++) {
-        d.fromBufferAttribute(p, i).normalize();
-        const r = Math.acos(Math.max(-1, Math.min(1, -d.z))) / Math.PI;
-        const t1 = ss(0.03, 0.10, r), t2 = ss(0.10, 0.20, r), t3 = ss(0.20, 0.32, r), t4 = ss(0.32, 0.60, r);
-        let cr = mix(mix(mix(mix(0, 0.019, t1), 0.054, t2), 0.21, t3), 0.44, t4);
-        let cg = mix(mix(mix(mix(0, 0.004, t1), 0.012, t2), 0.021, t3), 0.034, t4);
-        let cb = mix(mix(mix(mix(0.006, 0.23, t1), 0.75, t2), 1, t3), 1, t4);
-        const k = 0.55 * (d.y < 0 ? 1 + 0.65 * d.y : 1);
-        cr *= k; cg *= k; cb *= k;
-        const a = Math.pow(Math.max(0, d.dot(L1)), 5), b = Math.pow(Math.max(0, d.dot(L2)), 4);
-        col[i * 3] = cr + a * 1.5 + b * 0.75;
-        col[i * 3 + 1] = cg + a * 1.3 + b * 0.16;
-        col[i * 3 + 2] = cb + a * 2.0 + b * 0.85;
-      }
-      g.setAttribute("color", new T.BufferAttribute(col, 3));
-      es.add(new T.Mesh(g, new T.MeshBasicMaterial({ vertexColors: true, side: T.BackSide })));
-    });
-    return vortexEnvTex;
-  }
-
   /* =========================================================
      GEOMETRIE
      ========================================================= */
@@ -53017,8 +52979,8 @@ const HubKit = (function () {
   }
 
   return {
-    TAU, Q, seg, tU, MAP, MAP2, textures, materials, environment, vortexEnvironment, asteroidTextures, xf, fixWinding,
-    weldSeam, buildGeo, roundRect, arcLoft, loft, tube, ropeRing, block, dune, bin, windy, puffs, scalePuffs, glowCard
+    TAU, Q, seg, tU, MAP, MAP2, textures, materials, environment, asteroidTextures, xf, fixWinding,
+    buildGeo, roundRect, arcLoft, loft, tube, ropeRing, block, dune, bin, windy, puffs, scalePuffs, glowCard
   };
 })();
 /* ============================================================
@@ -56440,7 +56402,6 @@ const hubLevel = (function () {
   const SLAB = 0.22;                      // spessore dei sentieri
   const FLOOR_Y1 = PAD_C + PAD_R;
   const AO_HW = 5.6;                      // mezza larghezza coperta dalla mappa AO del sentiero
-  const FLOOR = { y: 0, water: false };
 
   /* Interruttori di ciò che è spento ma resta nei sorgenti. */
   const PATHS_ON = false;                 // sentieri, portali dei livelli, cartelli e decorazioni
