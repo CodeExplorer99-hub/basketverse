@@ -1583,7 +1583,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwe35sjc";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwe3azgw";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -4717,8 +4717,13 @@ const FX = (function () {
       intensity:     { value: 1.15 }
     },
     vertexShader: VERT,
+    /* highp sul sampler: three non ne dichiara la precisione e in GLSL ES 3.0
+       un sampler2D senza qualificatore è lowp. Il PC lo ignora (32 bit), i
+       telefoni no: la profondità letta a 16 bit faceva "a gradini" pavimento,
+       muri e soffitto, e la SSAO ci disegnava righe scure orizzontali su tutto
+       lo schermo (solo qualità ALTA, l'unica con la SSAO). */
     fragmentShader: `
-      uniform sampler2D tDepth;
+      uniform highp sampler2D tDepth;
       uniform mat4 projection, projectionInv;
       uniform float radius, bias, intensity;
       varying vec2 vUv;
@@ -54404,16 +54409,8 @@ const HubGym = (function () {
           float hubFw = max(fwidth(vHubXZ.x), fwidth(vHubXZ.y));
           float hubDy = (0.5 - abs(fract(hubRowF) - 0.5)) * ${PLANK_W.toFixed(3)};
           float hubDx = (0.5 - abs(fract(hubSegF) - 0.5)) * ${PLANK_L.toFixed(1)};
-          /* Fuga filtrata a scatola: la parte del pixel coperta dalla fuga
-             (larga 2 × 3 mm). Quando il pixel copre più della fuga la riga
-             schiarisce invece di restare nera e larga un pixel: su telefono
-             (risoluzione bassa) quelle righe nere sfarfallavano e scivolavano
-             a ogni movimento della visuale. */
-          float hubFwS = max(hubFw, 1e-5);
-          float hubLine = clamp(min(0.006, 0.003 + 0.5 * hubFwS - min(hubDy, hubDx)) / hubFwS, 0.0, 1.0)
-            * (1.0 - smoothstep(0.015, 0.04, hubFw));
-          // toni delle doghe: spariscono prima che una doga scenda sotto ~2 pixel (moiré)
-          float hubVar = (hubTone - 0.5) * (1.0 - smoothstep(0.02, 0.08, hubFw));
+          float hubLine = (1.0 - smoothstep(0.0, 0.004 + hubFw, min(hubDy, hubDx))) * clamp(1.0 - hubFw / 0.05, 0.0, 1.0);
+          float hubVar = (hubTone - 0.5) * clamp(1.0 - hubFw / 0.25, 0.0, 1.0);
           diffuseColor.rgb *= (1.0 + 0.32 * hubVar) * (1.0 - 0.45 * hubLine);`)
         .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
           roughnessFactor = clamp(roughnessFactor + 0.12 * hubVar, 0.05, 1.0);`);
