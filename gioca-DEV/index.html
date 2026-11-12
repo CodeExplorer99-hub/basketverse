@@ -1583,7 +1583,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwe2k09h";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwe35sjc";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -2523,12 +2523,18 @@ window.stats = function () {
 // nulla, senza errori. Il browser vibra solo dopo un gesto dell'utente: il tocco
 // sulla palla lo è.
 //
+// App Android "BasketVerse DEV" (PUBBLICAZIONE BASKETVERSE/app-android-live): espone
+// window.BVNative (vibrazione nativa, NativeHaptics.java). Se c'è si usa quella al
+// posto di navigator.vibrate, che nella WebView può non arrivare al motorino; la
+// presa della palla diventa il "clic" di sistema (EFFECT_CLICK) invece dei 12 ms.
+//
 // Eventi agganciati finora:
 //   - presa della palla (09-input, onDown) → tick minimo (12 ms)
 // ═══════════════════════════════════════════════════════════════════════════════
 const Haptics = (() => {
   const STORE_KEY = "bv.haptics";          // "0" = spente (per il futuro interruttore)
-  const supported = typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+  const native = (typeof window !== "undefined" && window.BVNative) || null;   // app DEV live
+  const supported = !!native || (typeof navigator !== "undefined" && typeof navigator.vibrate === "function");
 
   let enabled = true;
   try { enabled = localStorage.getItem(STORE_KEY) !== "0"; } catch (_) { /* storage bloccato */ }
@@ -2543,7 +2549,15 @@ const Haptics = (() => {
 
   function vibrate(arg) {
     if (!supported || !enabled) return false;
-    try { return navigator.vibrate(arg); } catch (_) { return false; }
+    try {
+      if (native) {
+        if (Array.isArray(arg)) native.pattern(arg.join(","));
+        else if (arg > 0) native.pulse(arg);
+        else native.stop();
+        return true;
+      }
+      return navigator.vibrate(arg);
+    } catch (_) { return false; }
   }
 
   return {
@@ -2561,9 +2575,12 @@ const Haptics = (() => {
     // Sequenza vibra/pausa/vibra… in ms, es. [80, 60, 80].
     pattern(seq) { return vibrate(seq); },
     // Ferma subito qualsiasi vibrazione in corso.
-    stop() { if (supported) { try { navigator.vibrate(0); } catch (_) {} } },
+    stop() { if (supported) { try { if (native) native.stop(); else navigator.vibrate(0); } catch (_) {} } },
     // ── eventi di gioco ──
-    ballGrab() { return vibrate(GRAB_MS); },
+    ballGrab() {
+      if (native && enabled) { try { native.click(); return true; } catch (_) { return false; } }
+      return vibrate(GRAB_MS);
+    },
   };
 })();
 /* ============================================================
@@ -6286,25 +6303,6 @@ const Message3D = (function () {
     x = x < 0 ? 0 : x > 1 ? 1 : x;
     const s = 1.70158, u = x - 1;
     return 1 + u * u * ((s + 1) * u + s);
-  }
-
-  // Dipinge un gradiente arcobaleno orizzontale sulla geometria di una riga:
-  // ogni vertice prende una tinta in base alla sua x (sinistra→destra), così le
-  // lettere sfumano rosso→viola lungo la parola. Statico: l'animazione è nel
-  // bagliore emissivo, non qui.
-  function paintRainbow(geom) {
-    geom.computeBoundingBox();
-    const bb = geom.boundingBox;
-    const pos = geom.attributes.position;
-    const minX = bb.min.x, spanX = (bb.max.x - bb.min.x) || 1;
-    const colAttr = new Float32Array(pos.count * 3);
-    const c = new T.Color();
-    for (let i = 0; i < pos.count; i++) {
-      const hue = (pos.getX(i) - minX) / spanX;   // 0 (sx) → 1 (dx)
-      c.setHSL(hue * 0.85, 1.0, 0.55);            // *0.85: non richiude sul rosso a destra
-      colAttr[i * 3] = c.r; colAttr[i * 3 + 1] = c.g; colAttr[i * 3 + 2] = c.b;
-    }
-    geom.setAttribute("color", new T.BufferAttribute(colAttr, 3));
   }
 
   // Costruisce (una volta sola) il banner swish: righe impilate e centrate,
