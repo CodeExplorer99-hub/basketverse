@@ -1583,7 +1583,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwe3azgw";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwe3lf40";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -2525,11 +2525,12 @@ window.stats = function () {
 //
 // App Android "BasketVerse DEV" (PUBBLICAZIONE BASKETVERSE/app-android-live): espone
 // window.BVNative (vibrazione nativa, NativeHaptics.java). Se c'è si usa quella al
-// posto di navigator.vibrate, che nella WebView può non arrivare al motorino; la
-// presa della palla diventa il "clic" di sistema (EFFECT_CLICK) invece dei 12 ms.
+// posto di navigator.vibrate, che nella WebView può non arrivare al motorino.
+// La durata la decide SEMPRE questo file (BVNative.pulse(ms)): così si ritocca
+// senza rifare l'APK. BVNative.click() dell'APK è fermo a 12 ms e non si usa più.
 //
 // Eventi agganciati finora:
-//   - presa della palla (09-input, onDown) → tick minimo (12 ms)
+//   - presa della palla (09-input, onDown) → tick breve (TICK_MS)
 // ═══════════════════════════════════════════════════════════════════════════════
 const Haptics = (() => {
   const STORE_KEY = "bv.haptics";          // "0" = spente (per il futuro interruttore)
@@ -2544,7 +2545,11 @@ const Haptics = (() => {
   // si sente bloccando un iPhone — mai vibrazioni lunghe tipo notifica. Il web non
   // permette di regolare l'intensità: la leggerezza si ottiene solo con la durata
   // brevissima (il motorino non fa in tempo ad andare a pieno regime).
-  const TICK_MS = 12;                       // tick base dello stile aptico
+  // ATTENZIONE AL MINIMO: sotto ~25-30 ms il motorino di molti telefoni Android
+  // non fa in tempo a partire e NON SI SENTE NULLA. È successo il 2026-11-12: con
+  // 500 ms vibrava, portato a 12 ms è diventato muto sia sul sito sia nell'app.
+  // Per alleggerire o rinforzare il tick si ritocca solo questo numero.
+  const TICK_MS = 40;                       // tick base dello stile aptico
   const GRAB_MS = TICK_MS;                  // presa della palla
 
   function vibrate(arg) {
@@ -2577,10 +2582,7 @@ const Haptics = (() => {
     // Ferma subito qualsiasi vibrazione in corso.
     stop() { if (supported) { try { if (native) native.stop(); else navigator.vibrate(0); } catch (_) {} } },
     // ── eventi di gioco ──
-    ballGrab() {
-      if (native && enabled) { try { native.click(); return true; } catch (_) { return false; } }
-      return vibrate(GRAB_MS);
-    },
+    ballGrab() { return vibrate(GRAB_MS); },
   };
 })();
 /* ============================================================
@@ -18642,6 +18644,255 @@ const TripleHoop = (function () {
 
   return { buildIcon, update, collide, active, decideY, snapOff };
 })();
+/* ============================================================================
+   OMBRA DELLE MANI — morbida e definita, in ogni livello.
+
+   Perché esiste: la mappa d'ombra del sole copre tutta la scena (nell'hub un
+   riquadro di ~28×36 m). Su Media/Bassa un suo pixel è largo 3-5 cm, più di
+   un dito: l'ombra delle mani a terra diventava una manciata di quadratini
+   neri seghettati.
+
+   Come funziona: le mani (e la palla quando è in mano) NON entrano più nella
+   mappa d'ombra della scena. Hanno una mappa tutta loro, piccola e stretta
+   attorno a loro:
+   1. una camera ortografica guarda le mani DALLA LUCE che fa ombra nel
+      livello corrente (sole, faretto...) e ne disegna la sagoma bianca in un
+      riquadro di 1,4 m → pixel da 5 mm (11 mm su LOW);
+   2. la sagoma viene sfocata (gaussiana in due passate) di una penombra
+      che cresce con l'altezza delle mani dal suolo, come un'ombra vera;
+   3. un decalco orizzontale posato sul suolo (groundInfo) proietta ogni suo
+      punto lungo la direzione della luce dentro quella mappa: dove c'è
+      sagoma il pavimento si scurisce.
+   Il buio dell'ombra segue il rapporto fra la luce che la proietta e quella
+   d'ambiente del livello. Niente luce che fa ombra, acqua o vuoto sotto le
+   mani → niente ombra (come prima).
+   ========================================================================== */
+const HandShadow = (() => {
+  const SIZE = LOW ? 128 : 256;      // risoluzione della mappa delle mani
+  const R = 0.7;                     // semi-lato del riquadro attorno alle mani (m)
+  const TEXEL = (2 * R) / SIZE;      // metri per pixel della mappa
+  const BALL_IN_HAND = 0.45;         // palla più vicina di così = parte della sagoma
+
+  let ready = false;
+  let rtSil, rtH, rtV, cam, silMat, blurMat, blurScene, blurCam, decal, decalMat;
+  let light = null, darkness = 0.5, scanTick = 0;
+  const casters = new Set();         // mesh delle mani tolte dalla mappa della scena
+  const swapped = [], hidden = [];
+  const _c = new T.Vector3(), _lp = new T.Vector3(), _lt = new T.Vector3();
+  const _dir = new T.Vector3(), _up = new T.Vector3(), _ball = new T.Vector3();
+  const _clear = new T.Color();
+
+  function makeRT(samples) {
+    const rt = new T.WebGLRenderTarget(SIZE, SIZE, {
+      minFilter: T.LinearFilter, magFilter: T.LinearFilter,
+      depthBuffer: false, stencilBuffer: false
+    });
+    if (samples > 0) rt.samples = samples;
+    rt.texture.generateMipmaps = false;
+    return rt;
+  }
+
+  function init() {
+    ready = true;
+    rtSil = makeRT(LOW ? 0 : 4);
+    rtH = makeRT(0);
+    rtV = makeRT(0);
+    cam = new T.OrthographicCamera(-R, R, R, -R, 0.05, 10);
+    silMat = new T.MeshBasicMaterial({ color: 0xffffff, side: T.DoubleSide });
+
+    // sfocatura gaussiana separabile: 13 campioni, sigma = 2 passi
+    blurMat = new T.ShaderMaterial({
+      uniforms: { tMap: { value: null }, uStep: { value: new T.Vector2() } },
+      vertexShader: "varying vec2 vUv;\nvoid main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+      fragmentShader: [
+        "uniform sampler2D tMap; uniform vec2 uStep; varying vec2 vUv;",
+        "void main(){",
+        "  float s = 0.0, w = 0.0;",
+        "  for (int k = -6; k <= 6; k++) {",
+        "    float fk = float(k);",
+        "    float g = exp(-0.125 * fk * fk);",
+        "    s += texture2D(tMap, vUv + uStep * fk).r * g; w += g;",
+        "  }",
+        "  gl_FragColor = vec4(vec3(s / w), 1.0);",
+        "}"
+      ].join("\n"),
+      depthTest: false, depthWrite: false
+    });
+    blurScene = new T.Scene();
+    const quad = new T.Mesh(new T.PlaneGeometry(2, 2), blurMat);
+    quad.frustumCulled = false;
+    blurScene.add(quad);
+    blurCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+    // decalco sul suolo: proietta il pavimento nella mappa delle mani
+    decalMat = new T.ShaderMaterial({
+      uniforms: {
+        tMask: { value: rtV.texture },
+        uShadowMat: { value: new T.Matrix4() },
+        uOpacity: { value: 0.5 }
+      },
+      vertexShader: [
+        "uniform mat4 uShadowMat; varying vec3 vS;",
+        "void main(){",
+        "  vec4 w = modelMatrix * vec4(position, 1.0);",
+        "  vS = (uShadowMat * w).xyz;",
+        "  gl_Position = projectionMatrix * viewMatrix * w;",
+        "}"
+      ].join("\n"),
+      fragmentShader: [
+        "uniform sampler2D tMask; uniform float uOpacity; varying vec3 vS;",
+        "void main(){",
+        "  vec2 uv = vS.xy * 0.5 + 0.5;",
+        "  if (uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0) discard;",
+        "  vec2 e = smoothstep(0.0, 0.08, uv) * smoothstep(0.0, 0.08, 1.0 - uv);",
+        "  float a = texture2D(tMask, uv).r * uOpacity * e.x * e.y;",
+        "  if (a < 0.003) discard;",
+        "  gl_FragColor = vec4(0.0, 0.0, 0.0, a);",
+        "}"
+      ].join("\n"),
+      transparent: true, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2
+    });
+    const g = new T.PlaneGeometry(1, 1);
+    g.rotateX(-Math.PI / 2);
+    decal = new T.Mesh(g, decalMat);
+    decal.renderOrder = 2;
+    decal.frustumCulled = false;
+    decal.castShadow = decal.receiveShadow = false;
+    decal.raycast = () => {};          // non deve intercettare i clic sul pavimento
+    decal.visible = false;
+    scene.add(decal);
+  }
+
+  /* La luce che fa ombra nel livello corrente: quella più forte fra le luci
+     visibili con castShadow. Il buio è la sua quota sul totale (ambiente
+     compreso): sole forte e poca luce diffusa → ombra più nera. */
+  function scanLights() {
+    let best = null, bestI = 0, amb = 0;
+    scene.traverseVisible((o) => {
+      if (!o.isLight) return;
+      if (o.isAmbientLight || o.isHemisphereLight) { amb += o.intensity; return; }
+      if (o.castShadow && (o.isDirectionalLight || o.isSpotLight || o.isPointLight) && o.intensity > bestI) {
+        if (best) amb += best.intensity * 0.5;
+        best = o; bestI = o.intensity;
+      } else if (o.isDirectionalLight) amb += o.intensity * 0.5;
+    });
+    light = best;
+    darkness = best ? Math.min(0.62, Math.max(0.3, bestI / (bestI + amb))) : 0;
+  }
+
+  // sagoma: mesh che proiettano ombra → bianco; tutto il resto nascosto
+  function prepare(root) {
+    root.traverse((o) => {
+      if (!o.visible) return;
+      if (o.isMesh && casters.has(o) && !(o.material && o.material.transparent)) {
+        swapped.push(o, o.material);
+        o.material = silMat;
+      } else if (o.isMesh || o.isLine || o.isPoints || o.isSprite) {
+        hidden.push(o);
+        o.visible = false;
+      }
+    });
+  }
+  function restore() {
+    for (let i = 0; i < swapped.length; i += 2) swapped[i].material = swapped[i + 1];
+    for (const o of hidden) o.visible = true;
+    swapped.length = 0; hidden.length = 0;
+  }
+
+  function blurPass(src, dst, sx, sy) {
+    blurMat.uniforms.tMap.value = src.texture;
+    blurMat.uniforms.uStep.value.set(sx, sy);
+    renderer.setRenderTarget(dst);
+    renderer.render(blurScene, blurCam);
+  }
+
+  function update() {
+    if (!ready) init();
+
+    // le mani (anche fionda/minigun aggiunti dopo) escono dalla mappa della scena
+    ballHandsGroup.traverse((o) => {
+      if (o.isMesh && o.castShadow) { casters.add(o); o.castShadow = false; }
+    });
+
+    if ((scanTick++ % 30) === 0) scanLights();
+    decal.visible = false;
+
+    // palla in mano: fa parte della sagoma; in volo torna nella mappa del sole
+    ballHandsGroup.getWorldPosition(_c);
+    ballMesh.getWorldPosition(_ball);
+    const ballIn = ballMesh.visible && _ball.distanceTo(_c) < BALL_IN_HAND;
+    ballMesh.castShadow = !ballIn;
+    if (ballIn) casters.add(ballMesh); else casters.delete(ballMesh);
+
+    if (!light || !ballHandsGroup.visible || !ballHandsGroup.parent) return;
+    for (let p = ballHandsGroup.parent; p; p = p.parent) if (!p.visible) return;
+
+    // direzione della luce verso le mani
+    light.getWorldPosition(_lp);
+    if (light.isPointLight) _dir.subVectors(_c, _lp);
+    else { light.target.getWorldPosition(_lt); _dir.subVectors(_lt, _lp); }
+    if (_dir.lengthSq() < 1e-6) return;
+    _dir.normalize();
+    if (_dir.y > -0.2) return;                       // luce troppo radente: niente decalco
+
+    // suolo dove cade l'ombra del centro delle mani
+    const g0 = groundInfo(_c.x, -_c.z);
+    let t = (_c.y - g0.y) / -_dir.y;
+    const g = groundInfo(_c.x + _dir.x * t, -(_c.z + _dir.z * t));
+    if (!g || g.water || g.y < -50) return;
+    const h = _c.y - g.y;
+    if (h < 0.05 || h > 12) return;
+    t = h / -_dir.y;
+    const px = _c.x + _dir.x * t, pz = _c.z + _dir.z * t;
+
+    // 1) sagoma vista dalla luce
+    cam.position.copy(_c).addScaledVector(_dir, -4);
+    _up.set(0, 1, 0);
+    if (Math.abs(_dir.y) > 0.95) _up.set(0, 0, -1);
+    cam.up.copy(_up);
+    cam.lookAt(_c);
+    cam.updateMatrixWorld();
+
+    const prevRT = renderer.getRenderTarget();
+    const prevAuto = renderer.autoClear;
+    renderer.getClearColor(_clear);
+    const prevAlpha = renderer.getClearAlpha();
+    renderer.setClearColor(0x000000, 1);
+    renderer.setRenderTarget(rtSil);
+    renderer.autoClear = true;
+    prepare(ballHandsGroup);
+    renderer.render(ballHandsGroup, cam);
+    restore();
+    if (ballIn) {
+      renderer.autoClear = false;
+      prepare(ballMesh);
+      renderer.render(ballMesh, cam);
+      restore();
+      renderer.autoClear = true;
+    }
+
+    // 2) penombra: cresce con la distanza dal suolo (≈ 2,3 cm a 1,4 m)
+    const sigma = 0.006 + 0.012 * h;                 // metri
+    const step = Math.max(0.5, sigma / TEXEL / 2) / SIZE;
+    blurPass(rtSil, rtH, step, 0);
+    blurPass(rtH, rtV, 0, step);
+
+    renderer.setRenderTarget(prevRT);
+    renderer.setClearColor(_clear, prevAlpha);
+    renderer.autoClear = prevAuto;
+
+    // 3) decalco sul suolo, grande quanto l'impronta del riquadro proiettato
+    decalMat.uniforms.uShadowMat.value.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    decalMat.uniforms.uOpacity.value = darkness * Math.exp(-Math.max(0, h - 1.2) * 0.25);
+    const side = Math.min(8, (2 * R * 1.5) / -_dir.y);
+    decal.position.set(px, g.y + 0.012, pz);
+    decal.scale.set(side, 1, side);
+    decal.visible = true;
+  }
+
+  return { update };
+})();
 /* ============================================================
    INPUT — fionda sulla palla (schermo -> velocità 3D)
    ============================================================ */
@@ -25035,6 +25286,7 @@ function loop(now) {
 
   updateHUD(dt);
   GameOver.update();               // TIRI FINITI: apre l'overlay quando il pool è a 0 e la palla è ferma
+  HandShadow.update();             // ombra morbida delle mani a terra (08j), mani già in posa
   /* Sotto ALTA le ombre si aggiornano ON-DEMAND: durante il volo della
      palla e nei livelli serve; a palla ferma sulla mano l'ombra non
      cambia e si risparmia un intero render della scena nel shadow pass.
@@ -41837,11 +42089,10 @@ const garageLevel = (function () {
   const MSG_POP   = 0.6;       // durata dell'animazione di comparsa (s)
 
   /* ---------- easter egg: portale di uscita ("ricalcolo riuscito") ----------
-     5 secondi DOPO che è comparsa la scritta si apre un teletrasporto IDENTICO
-     a quello della palestra (riusiamo lo stesso portalGroup + portalLight di
-     13-portal.js), piazzato davanti al giocatore. A differenza di quello della
-     palestra NON ha durata: resta lì finché il giocatore non lo prende con la
-     palla. Il viaggio poi segue le STESSE regole (livello casuale). Coordinate
+     5 secondi DOPO che è comparsa la scritta si apre un teletrasporto (riusa
+     portalGroup + portalLight di 13-portal.js), piazzato davanti al giocatore.
+     NON ha durata: resta lì finché il giocatore non lo prende con la palla,
+     e riporta all'hub (exitLevel). Coordinate
      in convenzione FISICA (z positivo = lontano): il mesh va a -z. */
   const PORTAL_DELAY = 5.0;    // ritardo dopo la scritta prima che si apra (s)
   const garagePortal = { active: false, spawned: false, x: 0, y: 2.4, z: 8.5 };
@@ -43195,8 +43446,8 @@ const SpacePhys = (function () {
    Giove/Saturno. Il canestro è piantato su un pianeta in lontananza.
 
    MECCANICA DEL LIVELLO — gravità quasi assente (la palla FLUTTUA):
-     - la forza che porta GIÙ la palla è abbassata dell'85%
-       (mod.gravityScale = 0.15, letto da activeGravity in 10-physics):
+     - la forza che porta GIÙ la palla è abbassata di circa l'84%
+       (mod.gravityScale = 0.159135, letto da activeGravity in 10-physics):
        galleggiamento "spaziale" ma con abbastanza peso da poter mirare
        al ferro (senza, la palla vola via come un palloncino);
      - la palla parte al 60% della velocità piena (mod.launchScale = 0.6,
@@ -45489,7 +45740,7 @@ const spaceLevel = (function () {
 
   /* =========================================================
      REGISTRAZIONE
-     - gravityScale: 0.15 → gravità molto bassa: la palla FLUTTUA ma ha un
+     - gravityScale: 0.159135 → gravità molto bassa: la palla FLUTTUA ma ha un
        minimo di peso, così ricade nel ferro e si può mirare (a 0.077 volava
        via come un palloncino).
      - launchScale : 0.6  → la palla parte al 60% della velocità piena.
