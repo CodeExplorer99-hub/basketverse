@@ -644,30 +644,6 @@ window.__BV_MOBILE_CAM__=matchMedia("(pointer:coarse)").matches;})();</script>
   #buyprompt .buy-no  { color: #ff5a5a; border: 2px solid rgba(255,90,90,.6); }
   #buyprompt .buy-no:hover { background: rgba(60,20,20,.8); }
 
-  /* ---------- PANNELLO STATISTICHE (in basso a sinistra) ----------
-     Informativo, non cliccabile. Una riga per stat: sigla + pallini di livello. */
-  #statspanel {
-    position: absolute; left: 16px; bottom: 90px;
-    display: flex; flex-direction: column; gap: 5px;
-    pointer-events: none; z-index: 12;
-  }
-  .statrow { display: flex; align-items: center; gap: 6px; }
-  .statabbr {
-    width: 30px; font-size: 12px; font-weight: 900; letter-spacing: .5px;
-    text-shadow: 0 1px 2px rgba(0,0,0,.7);
-    font-family: "Segoe UI", system-ui, Arial, sans-serif;
-  }
-  .statpip {
-    width: 11px; height: 6px; border-radius: 3px;
-    background: rgba(255,255,255,.14);
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,.35);
-    transition: background .18s, box-shadow .18s;
-  }
-  .statpip.on {
-    background: var(--c);
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,.25), 0 0 7px color-mix(in srgb, var(--c) 60%, transparent);
-  }
-
   /* ---------- MAZZAFIONDA (oggetto permanente) ----------
      Nascosta finché non possiedi l'oggetto (.owned la mostra).
      Spenta = smorzata; accesa = piena con alone ambra. */
@@ -1558,7 +1534,6 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
    tasti dei pannelli almeno 44 px. Sul PC (mouse) resta tutto com'era. */
 @media (pointer: coarse) {
   #powerval b { font-size: 14px; }
-  .statabbr { width: 34px; font-size: 14px; }
   .go-sub { font-size: 15px; }
   .go-btn-tx i { font-size: 14px; }
   #chal-hud .chal-lbl { font-size: 13px; letter-spacing: 1px; }
@@ -1608,7 +1583,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwe21vrh";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwe2k09h";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -1662,9 +1637,6 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 <div id="hud">
   <div id="streak"></div>
   <div id="aimbadge">Guided aim <b id="aimtime">30</b>s</div>
-  <!-- STATISTICHE DEL TIRO — riempito da 11-hud.js (una riga per stat, con i
-       pallini di livello). In basso a sinistra, informativo (non cliccabile). -->
-  <div id="statspanel"></div>
   <div id="powerwrap">
     <div id="powergauge">
       <div id="powerfill"></div>
@@ -5204,7 +5176,7 @@ function heightToNormal(srcCanvas, strength) {
     for (let x = 0; x < w; x++) {
       const dx = (lum(x + 1, y) - lum(x - 1, y)) * strength;
       const dy = (lum(x, y + 1) - lum(x, y - 1)) * strength;
-      let nx = -dx, ny = -dy;
+      const nx = -dx, ny = -dy;
       const inv = 1 / Math.hypot(nx, ny, 1.0);
       const i = (y * w + x) * 4;
       img.data[i]     = (nx * inv * 0.5 + 0.5) * 255;
@@ -5706,7 +5678,7 @@ const Contour = (function () {
 
   // DP su loop CHIUSO: spezza sui due punti più lontani e semplifica le due metà.
   function simplifyClosed(loop, eps) {
-    let p = loop.slice();
+    const p = loop.slice();
     if (p.length > 1 && same(p[0], p[p.length - 1])) p.pop();
     const n = p.length;
     if (n < 4) return p;
@@ -6599,8 +6571,9 @@ const Message3D = (function () {
 /* =========================================================
    KIT PERSONAGGI — utilità condivise dai modelli umani procedurali
    ---------------------------------------------------------
-   Usato dal commerciante del negozio (16-shop-cashier.js) e dal pubblico
-   della palestra (05g-crowd-fans.js). Solo strumenti generici: rumore,
+   Usato dal commerciante del negozio (16-shop-cashier.js), dal pubblico
+   (05g-crowd-fans.js), da soldato/mago/mendicante del medioevo (05o/05t/05u)
+   e dal rumore 3D di braccio del vortice e alieni (05f-vortex-arm/05j). Solo strumenti generici: rumore,
    normal map da campo d'altezza, superfici parametriche, tubi rastremati,
    unione di geometrie con colori per vertice, "altimetria" frontale di un
    volto scolpito, materiali fisici che su mobile (LOW) ripiegano su
@@ -6870,9 +6843,57 @@ const HumanKit = (function () {
     return { z, normal };
   }
 
+  /* ---------- modelli a gruppi di materiale (soldato, mago, mendicante) ----------
+     Ogni pezzo è una geometria con il suo colore per vertice, accodata alla
+     lista del suo materiale; alla fine un solo Mesh per materiale. */
+  // trasforma (scala → rotazione → posizione) e accoda una geometria alla lista
+  function putPart(list, geo, color, x, y, z, rx, ry, rz, sx, sy, sz) {
+    if (sx) geo.scale(sx, sy, sz);
+    if (rx || ry || rz) geo.applyMatrix4(new T.Matrix4().makeRotationFromEuler(new T.Euler(rx || 0, ry || 0, rz || 0)));
+    geo.translate(x, y, z);
+    list.push({ g: geo, c: color });
+  }
+  // un Mesh per ogni gruppo di materiale non vuoto, figli di `parent`
+  function emitGroups(parent, groups, mats, castShadow) {
+    for (const key of Object.keys(groups)) {
+      if (!groups[key].length) continue;
+      const m = new T.Mesh(mergeParts(groups[key]), mats[key]);
+      m.castShadow = castShadow;
+      parent.add(m);
+    }
+  }
+  // tubo rastremato lungo una spezzata di punti [x, y, z] (braccia, maniche)
+  function limbTube(pts, r0, r1, radial) {
+    const curve = new T.CatmullRomCurve3(pts.map((p) => new T.Vector3(p[0], p[1], p[2])));
+    return taperTube(curve, (t) => r0 + (r1 - r0) * t, 12, radial || 10, 1);
+  }
+
+  /* ---------- value noise 3D deterministico ----------
+     Niente Math.random: lo stesso modello a ogni avvio (braccio del vortice,
+     alieni). h3 = hash in [0,1), fbm = 4 ottave, ~0..0.94 con media ~0.47. */
+  function h3(x, y, z) {
+    const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
+    return s - Math.floor(s);
+  }
+  function vnoise3(x, y, z) {
+    const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+    const fx = x - ix, fy = y - iy, fz = z - iz;
+    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), uz = fz * fz * (3 - 2 * fz);
+    return lerp(
+      lerp(lerp(h3(ix, iy, iz), h3(ix + 1, iy, iz), ux), lerp(h3(ix, iy + 1, iz), h3(ix + 1, iy + 1, iz), ux), uy),
+      lerp(lerp(h3(ix, iy, iz + 1), h3(ix + 1, iy, iz + 1), ux), lerp(h3(ix, iy + 1, iz + 1), h3(ix + 1, iy + 1, iz + 1), ux), uy),
+      uz);
+  }
+  function fbm3(x, y, z) {
+    let a = 0.5, f = 1, s = 0;
+    for (let o = 0; o < 4; o++) { s += a * vnoise3(x * f, y * f, z * f); a *= 0.5; f *= 2.03; }
+    return s;
+  }
+
   return {
     clamp01, sstep, lerp, gauss, makeRng, makeNoise, normalMapFrom, tiled, paramSurface,
-    smoothSphereNormals, mat, makeProfile, taperTube, colorize, filterTris, mergeParts, makeFrontField
+    smoothSphereNormals, mat, makeProfile, taperTube, colorize, filterTris, mergeParts, makeFrontField,
+    putPart, emitGroups, limbTube, h3, fbm3
   };
 })();
 /* ============================================================
@@ -6889,26 +6910,8 @@ const HumanKit = (function () {
    (setClose) e dito tranciato che resta fuori (sever/restore).
    ============================================================ */
 const VortexArm = (function () {
-  // value noise 3D deterministico (copia locale: il modulo è autonomo)
-  function _h3(x, y, z) {
-    const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
-    return s - Math.floor(s);
-  }
-  function _vnoise(x, y, z) {
-    const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
-    const fx = x - ix, fy = y - iy, fz = z - iz;
-    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), uz = fz * fz * (3 - 2 * fz);
-    const L = (a, b, t) => a + (b - a) * t;
-    return L(
-      L(L(_h3(ix, iy, iz), _h3(ix + 1, iy, iz), ux), L(_h3(ix, iy + 1, iz), _h3(ix + 1, iy + 1, iz), ux), uy),
-      L(L(_h3(ix, iy, iz + 1), _h3(ix + 1, iy, iz + 1), ux), L(_h3(ix, iy + 1, iz + 1), _h3(ix + 1, iy + 1, iz + 1), ux), uy),
-      uz);
-  }
-  function _fbm(x, y, z) {
-    let a = 0.5, f = 1, s = 0;
-    for (let o = 0; o < 4; o++) { s += a * _vnoise(x * f, y * f, z * f); a *= 0.5; f *= 2.03; }
-    return s;   // ~0..0.94, media ~0.47
-  }
+  // value noise 3D deterministico (05f-human-kit)
+  const _h3 = HumanKit.h3, _fbm = HumanKit.fbm3;
 
   /* =========================================================
      COME È FATTO
@@ -8459,7 +8462,7 @@ const CrowdFans = (function () {
       const jc = o.jersey;
       const topAt = (phi, back) => {
         const a = Math.abs(back ? phi - PI : phi);
-        let y = lerp(sh + 0.02, 0.60 * sh, sstep(0.32, 1.12, a));
+        const y = lerp(sh + 0.02, 0.60 * sh, sstep(0.32, 1.12, a));
         return y - (back ? 0.03 : 0.085) * Math.exp(-Math.pow((back ? phi - PI : phi) / 0.30, 2));
       };
       for (const back of [false, true]) {
@@ -9371,26 +9374,8 @@ const AlienModel = (function () {
     [ 0.38, 0.49, 0.97], [ 0.70, 0.36, 0.88]
   ];
 
-  // value noise 3D deterministico (niente Math.random: il modello è sempre uguale)
-  function _h3(x, y, z) {
-    const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
-    return s - Math.floor(s);
-  }
-  function _vnoise(x, y, z) {
-    const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
-    const fx = x - ix, fy = y - iy, fz = z - iz;
-    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy), uz = fz * fz * (3 - 2 * fz);
-    const L = (a, b, t) => a + (b - a) * t;
-    return L(
-      L(L(_h3(ix, iy, iz), _h3(ix + 1, iy, iz), ux), L(_h3(ix, iy + 1, iz), _h3(ix + 1, iy + 1, iz), ux), uy),
-      L(L(_h3(ix, iy, iz + 1), _h3(ix + 1, iy, iz + 1), ux), L(_h3(ix, iy + 1, iz + 1), _h3(ix + 1, iy + 1, iz + 1), ux), uy),
-      uz);
-  }
-  function _fbm(x, y, z) {
-    let a = 0.5, f = 1, s = 0;
-    for (let o = 0; o < 4; o++) { s += a * _vnoise(x * f, y * f, z * f); a *= 0.5; f *= 2.03; }
-    return s;   // ~0..0.94, media ~0.47
-  }
+  // value noise 3D deterministico, niente Math.random: il modello è sempre uguale (05f-human-kit)
+  const _h3 = HumanKit.h3, _fbm = HumanKit.fbm3;
 
   // distanza "ellittica" dal centro bocca (1 = bordo del buco)
   function a2Ellipse(d) { return Math.hypot(d.x / A2.max, (d.y - A2.mcy) / A2.may); }
@@ -11010,7 +10995,7 @@ const Colosseum = (function () {
       const toC = new T.Vector3(0, 0, CZ).sub(mid);
       if (zA.dot(toC) < 0) { xA.negate(); zA = new T.Vector3().crossVectors(xA, yA); }
       const m = new T.Matrix4().makeBasis(xA, yA, zA).setPosition(mid);
-      let am = Math.atan2((mid.z - CZ) / (B + r), mid.x / (A + r));
+      const am = Math.atan2((mid.z - CZ) / (B + r), mid.x / (A + r));
       out.push({ m, w, th: am, k });
     }
     return out;
@@ -11741,7 +11726,7 @@ const TrunkModel = (function () {
         const ca = Math.cos(a), sa = Math.sin(a);
         // radiale − (dr/da)/r · tangente − dr/dy · su
         const t = fr.da / fr.k, u = (fr.dv * R) / h;
-        let nx = ca + t * sa, ny = -u, nz = sa - t * ca;
+        const nx = ca + t * sa, ny = -u, nz = sa - t * ca;
         const l = Math.hypot(nx, ny, nz);
         nrm.setXYZ(i, nx / l, ny / l, nz / l);
       }
@@ -11971,28 +11956,9 @@ const SoldierModel = (function () {
     skin: 0xc58e6c, beard: 0x3a2a1e, eye: 0x1a1410, leather: 0x4a3626, brig: 0x5c4a3a,
     boot: 0x3a2b20, wood: 0x6b4a2c
   };
-  // trasforma e accoda una geometria al gruppo di materiale
-  function put(list, geo, color, x, y, z, rx, ry, rz, sx, sy, sz) {
-    if (sx) geo.scale(sx, sy, sz);
-    if (rx || ry || rz) geo.applyMatrix4(new T.Matrix4().makeRotationFromEuler(new T.Euler(rx || 0, ry || 0, rz || 0)));
-    geo.translate(x, y, z);
-    list.push({ g: geo, c: color });
-  }
-  // un Mesh per ogni gruppo di materiale non vuoto, figli di `parent`
-  function emit(parent, groups) {
-    for (const key of Object.keys(groups)) {
-      if (!groups[key].length) continue;
-      const m = new T.Mesh(K.mergeParts(groups[key]), mats[key]);
-      m.castShadow = true;
-      parent.add(m);
-    }
-  }
+  const put = K.putPart, limbTube = K.limbTube;                 // 05f-human-kit
+  const emit = (parent, groups) => K.emitGroups(parent, groups, mats, true);
   const newGroups = () => ({ mail: [], steel: [], cloth: [] });
-  // tubo rastremato lungo una spezzata (braccia)
-  function limbTube(pts, r0, r1) {
-    const curve = new T.CatmullRomCurve3(pts.map((p) => new T.Vector3(p[0], p[1], p[2])));
-    return K.taperTube(curve, (t) => r0 + (r1 - r0) * t, 12, 10, 1);
-  }
 
   function buildShield(variant) {
     const shape = shieldShape(new T.Shape());
@@ -14053,23 +14019,9 @@ const WizardModel = (function () {
     skin: 0xd6a184, cheek: 0xc98a72, eye: 0x1c2a40, beard: 0xeeeeea, hair: 0xe4e4e0,
     gold: 0xd9ab45, goldDark: 0xa98030, wood: 0x5d3f26, woodDark: 0x3e2a19, collar: 0x152270
   };
-  function put(list, geo, color, x, y, z, rx, ry, rz, sx, sy, sz) {
-    if (sx) geo.scale(sx, sy, sz);
-    if (rx || ry || rz) geo.applyMatrix4(new T.Matrix4().makeRotationFromEuler(new T.Euler(rx || 0, ry || 0, rz || 0)));
-    geo.translate(x, y, z);
-    list.push({ g: geo, c: color });
-  }
-  function emit(parent, groups) {
-    for (const key of Object.keys(groups)) {
-      if (!groups[key].length) continue;
-      const m = new T.Mesh(K.mergeParts(groups[key]), mats[key]);
-      m.castShadow = false;
-      parent.add(m);
-    }
-  }
+  const put = K.putPart, tube = K.limbTube;                     // 05f-human-kit
+  const emit = (parent, groups) => K.emitGroups(parent, groups, mats, false);
   const newGroups = () => ({ robe: [], cloth: [], gold: [] });
-  const tube = (pts, r0, r1, radial) => K.taperTube(
-    new T.CatmullRomCurve3(pts.map((p) => new T.Vector3(p[0], p[1], p[2]))), (t) => r0 + (r1 - r0) * t, 12, radial || 10, 1);
   const lathe = (prof, seg) => new T.LatheGeometry(prof.map(([r, y]) => new T.Vector2(r, y)), seg);
   // anello orizzontale (orli, cordone, fasce)
   const ring = (r, tubeR, sz) => {
@@ -14469,25 +14421,9 @@ const BeggarModel = (function () {
     sack: 0x7a6a52, sackDark: 0x5e5040, patchA: 0x55604c, patchB: 0x8a6a44, rope: 0x8c7650,
     skin: 0xb98468, skinDirty: 0x8f6650, beard: 0x8e8a84, beardDark: 0x6a6660, eye: 0x15100c, lip: 0x8a5848
   };
-  function put(list, geo, color, x, y, z, rx, ry, rz, sx, sy, sz) {
-    if (sx) geo.scale(sx, sy, sz);
-    if (rx || ry || rz) geo.applyMatrix4(new T.Matrix4().makeRotationFromEuler(new T.Euler(rx || 0, ry || 0, rz || 0)));
-    geo.translate(x, y, z);
-    list.push({ g: geo, c: color });
-  }
-  function emit(parent, groups) {
-    for (const key of Object.keys(groups)) {
-      if (!groups[key].length) continue;
-      const m = new T.Mesh(K.mergeParts(groups[key]), mats[key]);
-      m.castShadow = true;
-      parent.add(m);
-    }
-  }
+  const put = K.putPart, limbTube = K.limbTube;                 // 05f-human-kit
+  const emit = (parent, groups) => K.emitGroups(parent, groups, mats, true);
   const newGroups = () => ({ rag: [], skin: [], wood: [], iron: [], copper: [] });
-  function limbTube(pts, r0, r1) {
-    const curve = new T.CatmullRomCurve3(pts.map((p) => new T.Vector3(p[0], p[1], p[2])));
-    return K.taperTube(curve, (t) => r0 + (r1 - r0) * t, 12, 10, 1);
-  }
   // il busto si curva in avanti salendo (schiena ingobbita)
   const lean = (y) => 0.1 * K.sstep(0.3, 0.9, y);
   // tinta del sacco: rattoppi, sporco verso terra
@@ -16198,8 +16134,6 @@ function _pouchAnchor(pt, pitch, dy, dz) {
            _SL_POUCH_C[2] + (ly * s + lz * c) + dz ];
 }
 
-// smoothstep locale (evita di dipendere da _haSS che è dopo nel file)
-function _slSS(x) { const t = Math.max(0, Math.min(1, x)); return t*t*(3-2*t); }
 
 // Orientamento corrente della fionda verso la mira (smorzato frame per frame).
 let _slAimYaw = 0, _slAimPitch = 0;
@@ -16242,7 +16176,7 @@ function updateSlingshotRig(cp) {
   // smorzandosi: è appesa a DUE elastici, quindi rimbalza come una molla fino a
   // fermarsi. In idle/followthrough è a riposo.
   const jitter = _ha.phase === 'charge' ? Math.sin(_ha.nowMs * 0.03) * 0.0015 * cp : 0;
-  const drawE  = _ha.phase === 'charge' ? _slSS(cp) : 0;
+  const drawE  = _ha.phase === 'charge' ? _haSS(cp) : 0;
 
   let pouchZ, pouchY, pouchPitch;
   if (_ha.phase === 'launch') {
@@ -16304,13 +16238,13 @@ function updateSlingshotRig(cp) {
   } else {
     const launching = _ha.phase === 'launch';
     const tl   = launching ? _ha.t / _haLaunchDur() : 1;
-    const kick = _slSS(tl * 3.0);                                   // scatto indietro rapido
-    const back = launching ? 1 : 1 - _slSS(_ha.t / _haFtDur());    // ritorno sulla sacca
+    const kick = _haSS(tl * 3.0);                                   // scatto indietro rapido
+    const back = launching ? 1 : 1 - _haSS(_ha.t / _haFtDur());    // ritorno sulla sacca
     const k    = Math.max(0.35, _slRelDraw);                        // anche un tiro debole fa il gesto
     hY     = (_slRelY - 0.020 * k * kick) * back;
     hZ     = (_slRelZ + _SL_HAND_KICK * k * kick) * back;
     hPitch =  _slRelPitch * back;
-    wrist  =  _slRelDraw * (1 - _slSS(tl * 2.0)) * back;           // il polso si rilassa
+    wrist  =  _slRelDraw * (1 - _haSS(tl * 2.0)) * back;           // il polso si rilassa
   }
   _slHandRPivot.position.set(_SL_POUCH_C[0], _SL_POUCH_C[1] + hY, _SL_POUCH_C[2] + hZ);
   _slHandRPivot.rotation.x = hPitch;
@@ -16405,7 +16339,7 @@ const _haAY = new T.Vector3(0, 1, 0);   // verticale
 const _haAZ = new T.Vector3(0, 0, 1);   // lungo la direzione di tiro (pronazione)
 const _haQ  = new T.Quaternion();       // quaternione temporaneo riusato
 
-// smoothstep 0→1 (f di ingresso viene già clampata)
+// smoothstep 0→1, ingresso clampato (lo usa anche la mazzafionda, 08b)
 function _haSS(x) { const t = Math.max(0, Math.min(1, x)); return t*t*(3-2*t); }
 
 /* Applica una rotazione extra al pivot nel frame del PARENT (ballHandsGroup)
@@ -22708,6 +22642,29 @@ const ShotCounter = LOW ? (function () {
     blinkBall(sec) { blinkT = Math.max(0, sec); }
   };
 })();
+
+/* ---------- dalla palla del contatore al mondo ----------
+   Usati dai ladri di palla (alieni dello spazio, soldati del medioevo):
+   hudBallWorld(dist, out) → punto del mondo a dist m dalla camera sul raggio
+     della palla del contatore (out); ritorna il raggio (m) che lì ha la
+     stessa grandezza a video
+   ndcToWorld(nx, ny, depth, out) → punto del mondo che a video cade in
+     (nx, ny) NDC, a profondità depth misurata lungo lo sguardo della camera */
+const _hbAnc = { x: 0, y: 0, r: 0 }, _hbRay = new T.Vector3(), _hbFwd = new T.Vector3();
+function hudBallWorld(dist, out) {
+  ShotCounter.ballAnchor(_hbAnc);
+  camera.updateMatrixWorld();
+  _hbRay.set(_hbAnc.x, _hbAnc.y, 0.5).unproject(camera).sub(camera.position).normalize();
+  camera.getWorldDirection(_hbFwd);
+  out.copy(camera.position).addScaledVector(_hbRay, dist);
+  return _hbAnc.r * dist * _hbRay.dot(_hbFwd) * Math.tan(camera.fov * Math.PI / 360);
+}
+function ndcToWorld(nx, ny, depth, out) {
+  camera.updateMatrixWorld();
+  _hbRay.set(nx, ny, 0.5).unproject(camera).sub(camera.position).normalize();
+  camera.getWorldDirection(_hbFwd);
+  return out.copy(camera.position).addScaledVector(_hbRay, depth / Math.max(0.2, _hbRay.dot(_hbFwd)));
+}
 /* ============================================================
    SCHEDA DEL GIOCATORE — overlay delle statistiche
    ------------------------------------------------------------
@@ -24967,9 +24924,9 @@ function loop(now) {
     const yaw   = (game.viewYaw || 0) + baseYaw();
     const pitch = game.viewPitch || 0;   // >0 = sguardo verso l'alto (modalità camera)
     if (yaw || pitch) {
-      let dx = camTargetCur.x - camera.position.x;
+      const dx = camTargetCur.x - camera.position.x;
       let dy = camTargetCur.y - camera.position.y;
-      let dz = camTargetCur.z - camera.position.z;
+      const dz = camTargetCur.z - camera.position.z;
       // 1) yaw attorno all'asse verticale
       const ca = Math.cos(yaw), sa = Math.sin(yaw);
       let nx = dx * ca + dz * sa;
@@ -29209,7 +29166,7 @@ const boatLevel = (function () {
       for (let it = 0; it < 2; it++) {
         if (!armPushOut(P, i, r)) break;
         dirty = true;
-        let dx = P[o] - P[b], dy = P[o + 1] - P[b + 1], dz = P[o + 2] - P[b + 2];
+        const dx = P[o] - P[b], dy = P[o + 1] - P[b + 1], dz = P[o + 2] - P[b + 2];
         const l = Math.hypot(dx, dy, dz) || 1e-6, k = segL / l;
         P[o] = P[b] + dx * k; P[o + 1] = P[b + 1] + dy * k; P[o + 2] = P[b + 2] + dz * k;
       }
@@ -32596,7 +32553,7 @@ const boatLevel = (function () {
   // mesh della mina che il giocatore tiene in mano / vola
   let flyingMineMesh = null;
   // pool di mine pronte per essere appiccicate al Kraken
-  let stuckMinePool = [];
+  const stuckMinePool = [];
 
   function buildFlyingMine() {
     if (flyingMineMesh) return;
@@ -36735,21 +36692,8 @@ function buildShopkeeper(opts) {
   const TEX = LOW ? 0.5 : 1;                         // scala delle texture procedurali
   const sphGeo = new T.SphereGeometry(1, 20, 14);    // sfera unitaria condivisa (scalata per mesh)
 
-  // value noise 2D periodico su griglia gw×gh (u,v in [0,1))
-  function makeNoise(gw, gh) {
-    const g = new Float32Array(gw * gh);
-    for (let i = 0; i < g.length; i++) g[i] = rnd();
-    return (u, v) => {
-      const x = u * gw, y = v * gh;
-      const x0 = Math.floor(x), y0 = Math.floor(y);
-      let fx = x - x0, fy = y - y0;
-      fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy);
-      const i0 = x0 % gw, i1 = (x0 + 1) % gw;
-      const r0 = (y0 % gh) * gw, r1 = ((y0 + 1) % gh) * gw;
-      const a = g[r0 + i0], b = g[r0 + i1], c = g[r1 + i0], d = g[r1 + i1];
-      return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
-    };
-  }
+  // value noise 2D periodico su griglia gw×gh (u,v in [0,1)), dal kit (05f)
+  const makeNoise = (gw, gh) => HumanKit.makeNoise(rnd, gw, gh);
   // capsula fra due punti
   const boneMesh = (a, b, r, m) => {
     const dir = new T.Vector3().subVectors(b, a);
@@ -38917,7 +38861,7 @@ function buildShopkeeper(opts) {
   const secretCost = () => SECRET_COST + priceBump;   // stessa penalità "troppo povero"
 
   let lairBuilt = false, lairWorld = null, lairStall = null;
-  let lairLights = [];
+  const lairLights = [];
   let lairSignLabel = null, lairSymbol = null;
   let secretCounterIcon = null;
   let secretBought = false;
@@ -38950,7 +38894,7 @@ function buildShopkeeper(opts) {
       }
     }
     // fuliggine dall'alto e sporco alla base
-    let gr = g.createLinearGradient(0, 0, 0, H);
+    const gr = g.createLinearGradient(0, 0, 0, H);
     gr.addColorStop(0, "rgba(0,0,0,0.72)"); gr.addColorStop(0.45, "rgba(0,0,0,0.15)");
     gr.addColorStop(0.85, "rgba(0,0,0,0)"); gr.addColorStop(1, "rgba(25,18,10,0.55)");
     g.fillStyle = gr; g.fillRect(0, 0, W, H);
@@ -39843,7 +39787,7 @@ function buildShopkeeper(opts) {
       const qx = Math.max(b.x0, Math.min(b.x1, ball.x));
       const qy = Math.max(b.y0, Math.min(b.y1, ball.y));
       const qz = Math.max(b.z0, Math.min(b.z1, ball.z));
-      let dx = ball.x - qx, dy = ball.y - qy, dz = ball.z - qz;
+      const dx = ball.x - qx, dy = ball.y - qy, dz = ball.z - qz;
       const d2 = dx * dx + dy * dy + dz * dz;
       if (d2 >= r * r) continue;
       let nx, ny, nz;
@@ -40876,9 +40820,9 @@ function buildShopkeeper(opts) {
     {
       const yaw   = (game.viewYaw || 0) + baseYaw();
       const pitch = game.viewPitch || 0;
-      let dx = camTargetCur.x - _icPosA.x;
+      const dx = camTargetCur.x - _icPosA.x;
       let dy = camTargetCur.y - _icPosA.y;
-      let dz = camTargetCur.z - _icPosA.z;
+      const dz = camTargetCur.z - _icPosA.z;
       const ca = Math.cos(yaw), sa = Math.sin(yaw);
       let nx = dx * ca + dz * sa;
       let nz = -dx * sa + dz * ca;
@@ -41872,7 +41816,7 @@ const ShortCircuit = (function () {
 const garageLevel = (function () {
   let built = false;
   let world  = null;
-  let garageLights = [];
+  const garageLights = [];
   let mine = null;             // mina del Kraken (modello di test)
   let debugHand = null;        // copia mano destra per studio orientamento
   let alien2 = null;           // alieno bavoso (modello condiviso 05j-alien.js)
@@ -44609,26 +44553,6 @@ const spaceLevel = (function () {
      contrario: la palla vola verso lo schermo mantenendo il punto a video
      sul contatore e rimpicciolendo fino alla sua grandezza, poi ci si fonde.
      ========================================================= */
-
-  // palla del contatore → punto del mondo a dist m dalla camera sul suo
-  // raggio (out); ritorna il raggio (m) che lì ha la stessa grandezza a video
-  function hudBallWorld(dist, out) {
-    ShotCounter.ballAnchor(_anc);
-    camera.updateMatrixWorld();
-    _ray.set(_anc.x, _anc.y, 0.5).unproject(camera).sub(camera.position).normalize();
-    camera.getWorldDirection(_camF);
-    out.copy(camera.position).addScaledVector(_ray, dist);
-    return _anc.r * dist * _ray.dot(_camF) * Math.tan(camera.fov * Math.PI / 360);
-  }
-
-  // punto del mondo che a video cade in (nx, ny) NDC, a profondità depth
-  // (misurata lungo lo sguardo della camera)
-  function ndcToWorld(nx, ny, depth, out) {
-    camera.updateMatrixWorld();
-    _ray.set(nx, ny, 0.5).unproject(camera).sub(camera.position).normalize();
-    camera.getWorldDirection(_camF);
-    return out.copy(camera.position).addScaledVector(_ray, depth / Math.max(0.2, _ray.dot(_camF)));
-  }
 
   // posa del morso: la faccia guarda la camera ma inclinata IN SU (BITE_TILT):
   // il ladro addenta la palla dal basso, così il suo corpo resta sotto la
@@ -47782,24 +47706,6 @@ const medievalLevel = (function () {
     return l;
   }
   const lootFlying = () => loots.some((l) => l.state === "free" || l.state === "magnet");
-
-  // palla del contatore → punto del mondo a dist m dalla camera sul suo raggio
-  // (out); ritorna il raggio che lì ha la stessa grandezza a video
-  function hudBallWorld(dist, out) {
-    ShotCounter.ballAnchor(_anc);
-    camera.updateMatrixWorld();
-    _ray.set(_anc.x, _anc.y, 0.5).unproject(camera).sub(camera.position).normalize();
-    camera.getWorldDirection(_camF);
-    out.copy(camera.position).addScaledVector(_ray, dist);
-    return _anc.r * dist * _ray.dot(_camF) * Math.tan(camera.fov * Math.PI / 360);
-  }
-  // punto del mondo che a video cade in (nx, ny) NDC, a profondità depth
-  function ndcToWorld(nx, ny, depth, out) {
-    camera.updateMatrixWorld();
-    _ray.set(nx, ny, 0.5).unproject(camera).sub(camera.position).normalize();
-    camera.getWorldDirection(_camF);
-    return out.copy(camera.position).addScaledVector(_ray, depth / Math.max(0.2, _ray.dot(_camF)));
-  }
 
   // la palla torna al mondo (staccata da lancia/soldato) e sparisce
   function lootOff(l) {
@@ -52101,7 +52007,8 @@ const medievalLevel = (function () {
    Tutto ciò che le decorazioni dell'hub (21-hub-*.js) hanno in comune:
    - texture cotte UNA volta sulla GPU (05h-gpu-bake): colore, normal e
      roughness vere per fondi, fianchi, legno, pietra, metalli, roccia;
-   - l'environment PMREM dell'hub, coerente con l'interno del palazzetto;
+   - l'environment PMREM dell'hub, coerente con l'interno del palazzetto
+     (quello del vecchio vortice resta in vortexEnvironment);
    - geometrie parametriche con UV in METRI (mai stirate) e normali
      saldate sulla cucitura;
    - particelle interamente nel vertex shader: nessuna allocazione e
@@ -52623,6 +52530,38 @@ const HubKit = (function () {
     return envTex;
   }
 
+  /* Environment del vecchio hub sospeso nel vuoto: gradiente del vortice (gola
+     nera davanti, viola e magenta ai lati) + due lobi morbidi. Va insieme a
+     buildDome di 21-level-hub.js, oggi spento. */
+  let vortexEnvTex = null;
+  function vortexEnvironment() {
+    if (vortexEnvTex) return vortexEnvTex;
+    vortexEnvTex = GpuBake.environment((es) => {
+      const g = new T.SphereGeometry(40, 64, 40);
+      const p = g.attributes.position, col = new Float32Array(p.count * 3);
+      const d = new T.Vector3();
+      const L1 = new T.Vector3(-0.35, 0.8, 0.5).normalize(), L2 = new T.Vector3(0.75, 0.2, -0.5).normalize();
+      const ss = (a, b, x) => K.sstep(a, b, x), mix = (a, b, t) => a + (b - a) * t;
+      for (let i = 0; i < p.count; i++) {
+        d.fromBufferAttribute(p, i).normalize();
+        const r = Math.acos(Math.max(-1, Math.min(1, -d.z))) / Math.PI;
+        const t1 = ss(0.03, 0.10, r), t2 = ss(0.10, 0.20, r), t3 = ss(0.20, 0.32, r), t4 = ss(0.32, 0.60, r);
+        let cr = mix(mix(mix(mix(0, 0.019, t1), 0.054, t2), 0.21, t3), 0.44, t4);
+        let cg = mix(mix(mix(mix(0, 0.004, t1), 0.012, t2), 0.021, t3), 0.034, t4);
+        let cb = mix(mix(mix(mix(0.006, 0.23, t1), 0.75, t2), 1, t3), 1, t4);
+        const k = 0.55 * (d.y < 0 ? 1 + 0.65 * d.y : 1);
+        cr *= k; cg *= k; cb *= k;
+        const a = Math.pow(Math.max(0, d.dot(L1)), 5), b = Math.pow(Math.max(0, d.dot(L2)), 4);
+        col[i * 3] = cr + a * 1.5 + b * 0.75;
+        col[i * 3 + 1] = cg + a * 1.3 + b * 0.16;
+        col[i * 3 + 2] = cb + a * 2.0 + b * 0.85;
+      }
+      g.setAttribute("color", new T.BufferAttribute(col, 3));
+      es.add(new T.Mesh(g, new T.MeshBasicMaterial({ vertexColors: true, side: T.BackSide })));
+    });
+    return vortexEnvTex;
+  }
+
   /* =========================================================
      GEOMETRIE
      ========================================================= */
@@ -53000,7 +52939,7 @@ const HubKit = (function () {
   }
 
   return {
-    TAU, Q, seg, tU, MAP, MAP2, textures, materials, environment, asteroidTextures, xf, fixWinding,
+    TAU, Q, seg, tU, MAP, MAP2, textures, materials, environment, vortexEnvironment, asteroidTextures, xf, fixWinding,
     buildGeo, roundRect, arcLoft, loft, tube, ropeRing, block, dune, bin, windy, puffs, scalePuffs, glowCard
   };
 })();
@@ -54467,8 +54406,16 @@ const HubGym = (function () {
           float hubFw = max(fwidth(vHubXZ.x), fwidth(vHubXZ.y));
           float hubDy = (0.5 - abs(fract(hubRowF) - 0.5)) * ${PLANK_W.toFixed(3)};
           float hubDx = (0.5 - abs(fract(hubSegF) - 0.5)) * ${PLANK_L.toFixed(1)};
-          float hubLine = (1.0 - smoothstep(0.0, 0.004 + hubFw, min(hubDy, hubDx))) * clamp(1.0 - hubFw / 0.05, 0.0, 1.0);
-          float hubVar = (hubTone - 0.5) * clamp(1.0 - hubFw / 0.25, 0.0, 1.0);
+          /* Fuga filtrata a scatola: la parte del pixel coperta dalla fuga
+             (larga 2 × 3 mm). Quando il pixel copre più della fuga la riga
+             schiarisce invece di restare nera e larga un pixel: su telefono
+             (risoluzione bassa) quelle righe nere sfarfallavano e scivolavano
+             a ogni movimento della visuale. */
+          float hubFwS = max(hubFw, 1e-5);
+          float hubLine = clamp(min(0.006, 0.003 + 0.5 * hubFwS - min(hubDy, hubDx)) / hubFwS, 0.0, 1.0)
+            * (1.0 - smoothstep(0.015, 0.04, hubFw));
+          // toni delle doghe: spariscono prima che una doga scenda sotto ~2 pixel (moiré)
+          float hubVar = (hubTone - 0.5) * (1.0 - smoothstep(0.02, 0.08, hubFw));
           diffuseColor.rgb *= (1.0 + 0.32 * hubVar) * (1.0 - 0.45 * hubLine);`)
         .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
           roughnessFactor = clamp(roughnessFactor + 0.12 * hubVar, 0.05, 1.0);`);
@@ -54558,6 +54505,8 @@ const HubGym = (function () {
       // lesene ai confini delle campate (solo sui lati veri)
       if (!main) continue;
       for (let p = 0; p <= bays; p++) {
+        // parete destra (k = 2): è il muro dei portali (21-hub-9), restano solo le lesene d'angolo
+        if (k === 2 && p > 0 && p < bays) continue;
         const s = p * BAY, PR = 4;
         for (let j = 0; j < PR; j++) {
           const y0 = j / PR * cy0, y1 = (j + 1) / PR * cy0;
@@ -56357,6 +56306,460 @@ function collideSticks() {
   }
 }
 /* ============================================================
+   HUB — IL MURO DEI PORTALI (distorsione spazio-temporale)
+   ------------------------------------------------------------
+   La parete DESTRA del palazzetto (quella a destra della gradinata,
+   x = +HX) è divisa a metà fra i primi due portali:
+     - metà verso la gradinata  → MARE   (whale)
+     - metà verso le spalle     → SPAZIO (space)
+   Ognuno occupa esattamente metà del muro. La superficie non è il
+   solito tunnel colorato: è una visione MOLTO sfocata e distorta del
+   livello, come se lo si guardasse attraverso uno SPECCHIO D'ACQUA
+   (onde lente, gocce che cadono e allargano anelli, riflessi). Al
+   centro del muro le due acque si scontrano: il confine ondeggia e le
+   immagini dei due mondi si mescolano.
+   Contorni eterei e colorati (fiamme fredde che salgono, colori del
+   portale) con leggere scariche elettriche che corrono lungo il bordo
+   e, ogni tanto, sul confine fra i due mondi.
+
+   Le "vedute" dei livelli sono dipinte UNA volta sulla GPU (GpuBake):
+   cielo, mare, balena col canestro e parapetto della barca; spazio,
+   Via Lattea, pianeti con gli anelli e il pianeta-canestro. Per frame
+   costa solo lo shader del muro (un draw call).
+
+   Si entra tirando la palla nell'acqua (21-level-hub: collideHall).
+   Un livello vinto ha l'acqua spenta e ferma: la palla rimbalza.
+
+   HubRift.build(parent, available)  available(id) → livello giocabile
+   HubRift.enter() / update(dt, t)   apertura all'ingresso nell'hub, tempo
+   HubRift.setWon(id, won)           portale spento (livello vinto)
+   HubRift.at(z, y)                  portale sotto il punto (z, y) della parete, o null
+   HubRift.splash(z, y, k)           anello d'acqua dove la palla tocca
+   ============================================================ */
+const HubRift = (function () {
+  const D = HubGym.DIM;
+  const L = 2 * (D.HZ - D.CH);            // muro dritto fra i due smussi (56 m)
+  const HALF = L / 2;
+  const HH = D.H - 0.6;                   // fino al cornicione
+  const X = D.HX - 0.06;                  // appena davanti alla parete
+  const M = 1.1, BOT = 0.55, TOP = HH - 0.8;   // acqua: margine laterale, basso, alto (m)
+  const OPEN_S = 2.4;                     // durata dell'apertura entrando nell'hub
+  const TEX_W = LOW ? 256 : 512, TEX_H = TEX_W / 2;
+
+  const RIFTS = [
+    { id: "whale", a: 0x1aa8d8, b: 0x7ff0ff },
+    { id: "space", a: 0x7a34ff, b: 0xff6bf0 }
+  ];
+
+  const { bake, lin } = GpuBake;
+  let mesh = null, U = null, openT = OPEN_S, lastT = 0, lastDrop = -9;
+
+  /* =========================================================
+     VEDUTE DEI LIVELLI (cotte una volta)
+     ========================================================= */
+  const FRAG_SEA = `
+    uniform vec3 cZen, cUp, cMid, cLow, cHaze, cSea, cSeaFar, cSun, cWhale, cWood;
+    void main() {
+      float asp = uRes.x / uRes.y;
+      vec2 uv = vUv;
+      float x = (uv.x - 0.5) * asp;
+      const float HOR = 0.44;
+      vec3 col;
+      if (uv.y >= HOR) {
+        float t = pow((uv.y - HOR) / (1.0 - HOR), 0.7);
+        col = mix(cHaze, cLow, smoothstep(0.0, 0.12, t));
+        col = mix(col, cMid, smoothstep(0.10, 0.40, t));
+        col = mix(col, cUp, smoothstep(0.35, 0.70, t));
+        col = mix(col, cZen, smoothstep(0.65, 1.0, t));
+        float n = fbm(vec3(x * 1.4, t * 6.0, 2.7), 5);
+        float cl = smoothstep(0.05, 0.5, n) * sfall(0.55, 0.08, t) * smoothstep(0.0, 0.05, t);
+        col = mix(col, mix(vec3(0.93, 0.94, 0.96), cHaze, 0.3), cl * 0.8);
+      } else {
+        float d = (HOR - uv.y) / HOR;           // 0 all'orizzonte, 1 in basso
+        col = mix(cHaze * 0.85, cSeaFar, smoothstep(0.0, 0.06, d));
+        col = mix(col, cSea, smoothstep(0.05, 0.7, d));
+        float z = 1.0 / (d + 0.05);
+        float w = fbm(vec3(x * z * 0.6, z * 1.8, 5.1), 4);
+        col *= 0.85 + 0.3 * w;
+        col = mix(col, vec3(0.9, 0.95, 1.0), smoothstep(0.45, 0.75, w) * 0.25 * (1.0 - d));
+        float gx = (uv.x - 0.24) * asp;         // scia del sole sull'acqua
+        float gl = exp(-gx * gx / (0.004 + 0.06 * d * d)) * smoothstep(0.1, 0.6, w * 0.5 + 0.5);
+        col += cSun * gl * 0.8 * (1.0 - d * 0.7);
+      }
+      // sole basso a sinistra
+      float ds = length(vec2((uv.x - 0.24) * asp, uv.y - (HOR + 0.10)));
+      col += cSun * (sfall(0.035, 0.025, ds) * 2.0 + exp(-ds * 9.0) * 0.45);
+
+      // balena: il dorso che affiora, col canestro appoggiato sopra
+      vec2 q = vec2((uv.x - 0.58) * asp, uv.y - (HOR - 0.10));
+      float hump = 0.075 * sqrt(max(0.0, 1.0 - pow(q.x / 0.42, 2.0)));
+      float wl = -0.012 + 0.004 * sin(q.x * 40.0);
+      float body = smoothstep(0.0, 0.006, hump - q.y) * smoothstep(wl - 0.004, wl + 0.004, q.y) * step(abs(q.x), 0.42);
+      vec3 skin = cWhale * (0.55 + 0.9 * clamp(q.y / 0.08, 0.0, 1.0)) * (0.85 + 0.3 * fbm(vec3(q * 30.0, 8.0), 3));
+      col = mix(col, skin, body);
+      float foam = exp(-pow((q.y - wl) / 0.006, 2.0)) * step(abs(q.x), 0.42);
+      col = mix(col, vec3(0.92, 0.96, 1.0), foam * 0.6);
+      // soffio
+      float sy = q.y - 0.06;
+      float sp = exp(-pow((q.x + 0.30) / (0.015 + max(sy, 0.0) * 0.45), 2.0)) * smoothstep(0.0, 0.04, sy) * sfall(0.30, 0.10, sy);
+      col = mix(col, vec3(0.95, 0.97, 1.0), sp * (0.45 + 0.4 * fbm(vec3(q * 25.0, 1.0), 3)));
+      // canestro: palo, tabellone bianco, ferro arancio
+      float h0 = 0.075, hx = q.x - 0.04;
+      float pole = step(abs(hx), 0.0035) * step(h0 - 0.01, q.y) * step(q.y, h0 + 0.13);
+      vec2 bb = vec2(hx, q.y - (h0 + 0.15));
+      float board = step(abs(bb.x), 0.042) * step(abs(bb.y), 0.03);
+      float rim = step(abs(hx + 0.028), 0.022) * step(abs(q.y - (h0 + 0.128)), 0.003);
+      col = mix(col, vec3(0.30, 0.31, 0.33), pole);
+      col = mix(col, vec3(0.95), board);
+      col = mix(col, vec3(1.0, 0.35, 0.06), rim);
+
+      // parapetto della barca in primo piano
+      float rx = x / (asp * 0.5);
+      float rail = 0.10 + 0.05 * (1.0 - rx * rx);
+      if (uv.y < rail) {
+        float pl = fbm(vec3(x * 2.0, uv.y * 40.0, 1.0), 3);
+        vec3 wood = cWood * (0.7 + 0.3 * pl) * (0.55 + 0.45 * uv.y / rail);
+        wood = mix(wood, cWood * 1.5, exp(-pow((rail - uv.y) / 0.006, 2.0)));
+        col = mix(col, wood, smoothstep(rail, rail - 0.004, uv.y));
+      }
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  const FRAG_SPACE = `
+    uniform vec3 cJ1, cJ2, cJs, cI1, cI2, cR1, cR2, cK1, cK2, cAtJ, cAtI, cAtK, cB1, cB2;
+    const vec3 LDIR = vec3(-0.62, 0.66, 0.42);
+    float lam(vec3 n) { return clamp(dot(n, normalize(LDIR)), 0.0, 1.0); }
+    // pianeta a bande: rgb colore, a copertura
+    vec4 planet(vec2 p, vec2 c, float r, vec3 a, vec3 b, vec3 s, float freq, float seed, vec3 atmo) {
+      vec2 q = (p - c) / r;
+      float d = length(q);
+      float cov = sfall(1.01, 0.97, d);
+      vec3 n = vec3(q, sqrt(max(0.0, 1.0 - d * d)));
+      float tur = fbm(vec3(q * 3.0, seed), 4);
+      vec3 col = mix(a, b, 0.5 + 0.5 * sin(n.y * freq + tur * 2.5));
+      col = mix(col, s, smoothstep(0.25, 0.6, fbm(vec3(q * 5.0, seed + 3.0), 3)) * 0.35);
+      float li = lam(n);
+      col = col * (0.05 + 1.05 * li) + atmo * smoothstep(0.7, 1.0, d) * li * 0.6;
+      return vec4(col, cov);
+    }
+    // anello inclinato: copertura (davanti/dietro decisi da chi chiama)
+    float ring(vec2 p, vec2 c, float r, float ang, out float frontSide) {
+      vec2 q = (p - c) / r;
+      float ca = cos(ang), sa = sin(ang);
+      q = vec2(ca * q.x + sa * q.y, -sa * q.x + ca * q.y);
+      q.y /= 0.27;
+      float d = length(q);
+      frontSide = step(q.y, 0.0);
+      float band = smoothstep(1.3, 1.36, d) * sfall(2.15, 2.05, d);
+      return band * (0.55 + 0.45 * sin(d * 38.0)) * (1.0 - 0.6 * smoothstep(1.7, 1.75, d) * sfall(1.8, 1.75, d));
+    }
+    void main() {
+      float asp = uRes.x / uRes.y;
+      vec2 p = vec2(vUv.x * asp, vUv.y);
+      vec3 col = vec3(0.004, 0.003, 0.012);
+      // Via Lattea in diagonale, dal basso a sinistra verso l'alto a destra
+      vec2 bd = normalize(vec2(1.0, 0.55));
+      float dd = dot(p - vec2(0.0, 0.1), vec2(-bd.y, bd.x));
+      float neb = fbm(vec3(p * 3.0, 1.0), 5);
+      col += mix(cB1, cB2, smoothstep(-0.3, 0.5, neb)) * exp(-dd * dd * 10.0) * (0.55 + 0.45 * neb) * 0.35;
+      col *= 1.0 - 0.55 * smoothstep(0.1, 0.5, fbm(vec3(p * 7.0, 4.0), 4)) * exp(-dd * dd * 40.0);
+      // stelle
+      for (int k = 0; k < 2; k++) {
+        float sc = k == 0 ? 70.0 : 170.0;
+        vec2 g = p * sc, id = floor(g), f = fract(g) - 0.5;
+        vec3 h = hash33(vec3(id, float(k) * 7.0));
+        if (h.x > (k == 0 ? 0.90 : 0.80)) {
+          vec2 o = (h.yz - 0.5) * 0.6;
+          col += vec3(0.85, 0.9, 1.0) * exp(-dot(f - o, f - o) * 40.0) * (0.4 + 1.6 * h.y);
+        }
+      }
+      float fs;
+      // gigante ambrato con anello, in alto a sinistra
+      vec2 cJ = vec2(0.42, 0.70);
+      float rb = ring(p, cJ, 0.17, 0.45, fs);
+      col = mix(col, vec3(0.86, 0.78, 0.62), rb * (1.0 - fs) * 0.8);
+      vec4 pj = planet(p, cJ, 0.17, cJ1, cJ2, cJs, 22.0, 1.3, cAtJ);
+      col = mix(col, pj.rgb, pj.a);
+      col += cAtJ * exp(-max(length(p - cJ) - 0.17, 0.0) * 30.0) * (1.0 - pj.a) * 0.25;
+      col = mix(col, vec3(0.86, 0.78, 0.62), rb * fs * 0.8);
+      // ghiaccio con anello, a destra
+      vec2 cI = vec2(1.80, 0.60);
+      float ri = ring(p, cI, 0.11, -0.35, fs);
+      col = mix(col, vec3(0.75, 0.84, 0.92), ri * (1.0 - fs) * 0.75);
+      vec4 pi = planet(p, cI, 0.11, cI1, cI2, cI2, 16.0, 4.1, cAtI);
+      col = mix(col, pi.rgb, pi.a);
+      col += cAtI * exp(-max(length(p - cI) - 0.11, 0.0) * 35.0) * (1.0 - pi.a) * 0.3;
+      col = mix(col, vec3(0.75, 0.84, 0.92), ri * fs * 0.75);
+      // piccolo rossastro lontano
+      vec4 pr = planet(p, vec2(1.28, 0.87), 0.035, cR1, cR2, cR1, 12.0, 7.7, cR2);
+      col = mix(col, pr.rgb, pr.a);
+      // pianeta-canestro: roccia viola che riempie il basso
+      vec2 cK = vec2(asp * 0.5, -1.0);
+      float rK = 1.18;
+      vec2 qk = (p - cK) / rK;
+      float dk = length(qk);
+      float covK = sfall(1.003, 0.997, dk);
+      vec3 nk = vec3(qk, sqrt(max(0.0, 1.0 - dk * dk)));
+      float cr = fbm(vec3(p * 9.0, 2.0), 4);
+      vec3 rock = mix(cK1, cK2, smoothstep(-0.3, 0.6, cr));
+      rock *= 1.0 - 0.35 * smoothstep(0.25, 0.5, fbm(vec3(p * 16.0, 6.0), 3));
+      rock = rock * (0.25 + 0.9 * lam(normalize(nk + vec3(0.0, 0.0, 0.4))));
+      col = mix(col, rock, covK);
+      col += cAtK * exp(-max(dk - 1.0, 0.0) * 60.0) * 0.55;
+      // il canestro piantato sulla cima
+      float top = cK.y + rK;
+      float hx = p.x - asp * 0.5;
+      col = mix(col, vec3(0.35, 0.36, 0.40), step(abs(hx), 0.004) * step(top - 0.01, p.y) * step(p.y, top + 0.13));
+      col = mix(col, vec3(0.95), step(abs(hx), 0.045) * step(abs(p.y - (top + 0.155)), 0.032));
+      col = mix(col, vec3(1.0, 0.35, 0.06), step(abs(hx + 0.03), 0.024) * step(abs(p.y - (top + 0.13)), 0.003));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  function bakeViews() {
+    const sea = bake(FRAG_SEA, {
+      cZen: { value: lin("#1e5fa8") }, cUp: { value: lin("#3f86c6") },
+      cMid: { value: lin("#79b4de") }, cLow: { value: lin("#bcd9ec") },
+      cHaze: { value: lin("#dbe7e6") }, cSea: { value: lin("#0a3f60") },
+      cSeaFar: { value: lin("#2f6f8f") }, cSun: { value: lin("#fff1d6") },
+      cWhale: { value: lin("#56606c") }, cWood: { value: lin("#7a5232") }
+    }, TEX_W, TEX_H, true, 1);
+    const space = bake(FRAG_SPACE, {
+      cJ1: { value: lin("#c9a26a") }, cJ2: { value: lin("#e6cfa0") }, cJs: { value: lin("#c34a33") },
+      cI1: { value: lin("#8fb6d6") }, cI2: { value: lin("#c4dcec") },
+      cR1: { value: lin("#b05a3a") }, cR2: { value: lin("#d68a5e") },
+      cK1: { value: lin("#4c4568") }, cK2: { value: lin("#a99ec6") },
+      cAtJ: { value: lin("#ffcf96") }, cAtI: { value: lin("#9fd4ff") }, cAtK: { value: lin("#a996ff") },
+      cB1: { value: lin("#7f6bff") }, cB2: { value: lin("#ffd2b0") }
+    }, TEX_W, TEX_H, true, 1);
+    return { sea, space };
+  }
+
+  /* =========================================================
+     LO SPECCHIO D'ACQUA SUL MURO
+     ========================================================= */
+  const VERT = `
+    uniform vec2 uSize;
+    varying vec2 vP;
+    void main() {
+      vP = uv * uSize;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+
+  const FRAG = `
+    uniform sampler2D tA, tB;
+    uniform float uT;
+    uniform vec2 uSize, uOpen, uLit;
+    uniform vec4 uDrop;
+    uniform vec3 uA1, uA2, uB1, uB2;
+    varying vec2 vP;
+
+    float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+    float vnoise(vec2 p) {
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+    }
+    float fbm3(vec2 p) { return 0.5 * vnoise(p) + 0.3 * vnoise(p * 2.07 + 3.1) + 0.2 * vnoise(p * 4.13 + 7.7); }
+
+    // la veduta del livello, molto sfocata: mipmap alta (+ letture sparse su PC)
+    vec3 look(sampler2D tex, vec2 uv) {
+      vec3 c = texture2D(tex, uv, BLUR).rgb;
+      #ifdef SOFT
+      c += texture2D(tex, uv + vec2(0.014, 0.022), BLUR).rgb;
+      c += texture2D(tex, uv + vec2(-0.018, -0.009), BLUR).rgb;
+      c += texture2D(tex, uv + vec2(0.007, -0.025), BLUR).rgb;
+      c *= 0.25;
+      #endif
+      return c;
+    }
+
+    void main() {
+      vec2 P = vP;                                 // metri: x lungo il muro (0 = lato gradinata), y altezza
+      float L = uSize.x, Hh = uSize.y, HALF = L * 0.5, TOP = Hh - ${(HH - TOP).toFixed(2)};
+      const float M = ${M.toFixed(2)}, BOT = ${BOT.toFixed(2)};
+      float t = uT;
+
+      // confine fra i due mondi: ondeggia
+      float seam = HALF + 0.7 * sin(P.y * 0.55 + t * 0.8) + 0.9 * (fbm3(vec2(P.y * 0.35, t * 0.3)) - 0.5);
+      float side = smoothstep(seam - 1.3, seam + 1.3, P.x);     // 0 mare, 1 spazio
+      float lit = mix(uLit.x, uLit.y, side);
+      float open = mix(uOpen.x, uOpen.y, side);
+
+      // bordo: distanza (m) dal rettangolo dell'acqua, sfrangiata da un rumore che sale
+      float dx = min(P.x - M, L - M - P.x), dy = min(P.y - BOT, TOP - P.y);
+      float e = min(dx, dy);
+      float fl = fbm3(P * 0.55 + vec2(0.0, -t * 0.7));
+      float eN = e + (fl - 0.5) * 1.6;
+
+      // apertura: l'acqua si allarga dal centro di ciascun portale
+      vec2 hs = vec2(HALF * 0.5 - M, (TOP - BOT) * 0.5);
+      vec2 cq = (P - vec2(P.x < HALF ? HALF * 0.5 : HALF * 1.5, (BOT + TOP) * 0.5)) / hs;
+      float om = smoothstep(0.0, 0.18, open * 1.65 - length(cq) + (fl - 0.5) * 0.35);
+      float m = smoothstep(0.0, 0.9, eN) * om;    // copertura dell'acqua
+
+      // ---- superficie dell'acqua: spostamento (m) ----
+      vec2 w = vec2(sin(P.y * 0.8 + t * 1.2 + 1.5 * sin(P.x * 0.31 + t * 0.4)),
+                    cos(P.x * 0.65 - t * 1.0 + 1.2 * sin(P.y * 0.47 - t * 0.3))) * 0.10;
+      w += vec2(sin(P.x * 1.7 + P.y * 1.2 + t * 2.0), sin(-P.x * 1.3 + P.y * 2.1 - t * 1.6)) * 0.05;
+      // gocce che cadono a caso: anelli concentrici
+      for (int i = 0; i < DROPS; i++) {
+        float fi = float(i), per = 2.6 + fi * 0.9;
+        float k = t / per + fi * 0.37;
+        float id = floor(k), ph = fract(k);
+        vec2 c = vec2(M + 2.0 + h21(vec2(id, fi)) * (L - 2.0 * M - 4.0), BOT + 1.5 + h21(vec2(fi, id + 3.1)) * (TOP - BOT - 3.0));
+        vec2 v = P - c;
+        float d = length(v) + 1e-3, rad = ph * 7.0;
+        w += v / d * sin((d - rad) * 3.2) * exp(-abs(d - rad) * 0.9) * (1.0 - ph) * 0.16;
+      }
+      // la palla che tocca l'acqua
+      float di = t - uDrop.z;
+      if (di > 0.0 && di < 3.5) {
+        vec2 v = P - uDrop.xy;
+        float d = length(v) + 1e-3, rad = di * 5.0;
+        w += v / d * sin((d - rad) * 3.0) * exp(-abs(d - rad) * 0.7) * exp(-di * 1.1) * uDrop.w * 0.5;
+      }
+      // dove i due mondi si incontrano le onde si scontrano
+      float sz = exp(-pow((P.x - seam) / 1.7, 2.0));
+      w += vec2(sin(P.y * 2.6 - t * 3.6) + 0.6 * sin(P.y * 5.1 + t * 4.4), cos(P.y * 2.1 + t * 3.0)) * 0.20 * sz;
+      w *= mix(0.1, 1.0, lit) * om;                // spento: acqua quasi ferma
+
+      // ---- la veduta vista attraverso l'acqua ----
+      vec2 off = w * vec2(0.09, 0.12);
+      float vy = clamp((P.y - BOT) / (TOP - BOT), 0.0, 1.0) + off.y;
+      float uA = (P.x - M) / (HALF - M), uB = (P.x - HALF) / (HALF - M);
+      vec3 cA = vec3(0.0), cB = vec3(0.0);
+      if (side < 0.999) cA = look(tA, vec2(1.0 - abs(1.0 - uA) + off.x, vy));
+      if (side > 0.001) cB = look(tB, vec2(abs(uB) + off.x, vy));
+      vec3 img = mix(cA, cB, side);
+
+      vec3 g1 = mix(uA1, uB1, side), g2 = mix(uA2, uB2, side);
+      vec3 n = normalize(vec3(-w * 2.2, 1.0));
+      float spec = pow(max(dot(n, normalize(vec3(0.25, 0.55, 1.0))), 0.0), 40.0);
+      float caus = pow(abs(sin(w.x * 9.0 + t * 0.6) * sin(w.y * 8.0 - t * 0.5)), 3.0);
+      img *= 0.9 + 0.22 * (n.x + n.y);
+      img = mix(img, img * (0.75 + 0.5 * g1), 0.25);          // velo del colore del portale
+      img += (vec3(0.9, 0.95, 1.0) * spec * 0.3 + g2 * caus * 0.07) * lit;
+      img += mix(uA2, uB2, 0.5 + 0.5 * sin(P.y * 0.7 + t)) * sz * 0.08 * lit;   // bruma sul confine
+      img = mix(vec3(dot(img, vec3(0.3, 0.55, 0.15))) * 0.16, img, lit);       // spento: scuro
+
+      // ---- contorno etereo ----
+      float hueN = fbm3(P * 0.35 + vec2(t * 0.25, -t * 0.4));
+      vec3 gcol = mix(g1, g2, smoothstep(0.3, 0.7, hueN));
+      float wisp = fbm3(vec2(P.x * 0.7 + P.y * 0.25, P.y * 0.7) + vec2(0.0, -t * 1.1));
+      float halo = exp(-abs(eN - 0.15) * 1.6) * (0.35 + 0.9 * wisp * wisp);
+      float rimL = exp(-abs(eN - 0.3) * 6.0) * (0.5 + 0.5 * wisp);
+      vec3 add = gcol * (halo * 0.55 + rimL * 0.6) * om * mix(0.06, 1.0, lit);
+
+      // ---- scariche elettriche lungo il bordo ----
+      float along = dx < dy ? P.y + (P.x > HALF ? 40.0 : 0.0) : P.x + (P.y > Hh * 0.5 ? 80.0 : 0.0);
+      float jag = (fbm3(vec2(along * 1.3, t * 9.0)) - 0.5) * 1.1 + (vnoise(vec2(along * 6.0, t * 14.0)) - 0.5) * 0.25;
+      float b = abs(eN - 0.25 - jag);
+      float sg = along * 0.22, seg = floor(sg);
+      float tk = t * 6.0 + h21(vec2(seg, 1.7)) * 6.0;
+      float on = step(0.86, h21(vec2(seg, floor(tk)))) * (1.0 - fract(tk))
+               * smoothstep(0.0, 0.15, fract(sg)) * sfall(1.0, 0.85, fract(sg));
+      add += (vec3(1.0) * exp(-b * 30.0) * 1.2 + gcol * exp(-b * 6.0) * 0.45) * on * lit * om;
+      // e ogni tanto sul confine fra i due mondi
+      float bs = abs(P.x - seam - (fbm3(vec2(P.y * 1.1, t * 8.0)) - 0.5) * 1.4);
+      float ssg = floor(P.y * 0.3), stk = t * 5.0 + h21(vec2(ssg, 9.1)) * 5.0;
+      float son = step(0.82, h21(vec2(ssg + 31.0, floor(stk)))) * (1.0 - fract(stk));
+      add += (vec3(1.0) * exp(-bs * 26.0) + mix(uA2, uB2, 0.5) * exp(-bs * 5.0) * 0.4) * son * min(uLit.x, uLit.y) * m;
+
+      add *= smoothstep(0.0, 0.6, min(P.x, L - P.x)) * smoothstep(0.0, 0.25, P.y) * smoothstep(0.0, 0.4, Hh - P.y);
+      // alfa premoltiplicato: l'acqua copre il muro, bagliore e scariche si sommano
+      gl_FragColor = vec4(img * m + add, m);
+      #include <colorspace_fragment>
+    }
+  `;
+
+  function sfallGLSL() {
+    return "float sfall(float hi, float lo, float x) { return 1.0 - smoothstep(lo, hi, x); }\n";
+  }
+
+  function build(parent, available) {
+    if (mesh) { parent.add(mesh); return; }
+    const views = bakeViews();
+    const c = (hex) => lin(hex);
+    U = {
+      tA: { value: views.sea }, tB: { value: views.space },
+      uT: { value: 0 },
+      uSize: { value: new T.Vector2(L, HH) },
+      uOpen: { value: new T.Vector2(1, 1) },
+      uLit: { value: new T.Vector2(1, 1) },
+      uDrop: { value: new T.Vector4(0, 0, -99, 0) },
+      uA1: { value: c(RIFTS[0].a) }, uA2: { value: c(RIFTS[0].b) },
+      uB1: { value: c(RIFTS[1].a) }, uB2: { value: c(RIFTS[1].b) }
+    };
+    const defines = { BLUR: "2.4", DROPS: LOW ? 2 : 3 };
+    if (!LOW) defines.SOFT = "";
+    const mat = new T.ShaderMaterial({
+      uniforms: U, defines,
+      vertexShader: VERT,
+      fragmentShader: sfallGLSL() + FRAG,
+      transparent: true, premultipliedAlpha: true, depthWrite: false,
+      fog: false, toneMapped: false
+    });
+    mesh = new T.Mesh(new T.PlaneGeometry(L, HH), mat);
+    mesh.rotation.y = -Math.PI / 2;                 // guarda verso il centro della sala (-x)
+    mesh.position.set(X, HH / 2, 0);                // uv.x = 0 sul lato della gradinata
+    mesh.renderOrder = 2;
+    for (const r of RIFTS) { r.available = available(r.id); r.won = false; r.taken = false; }
+    applyLit();
+    parent.add(mesh);
+  }
+
+  function applyLit() {
+    if (!U) return;
+    U.uLit.value.set(lit(RIFTS[0]) ? 1 : 0, lit(RIFTS[1]) ? 1 : 0);
+  }
+  const lit = (r) => r.available && !r.won;
+
+  function enter() {
+    openT = 0;
+    for (const r of RIFTS) r.taken = false;
+    if (U) U.uOpen.value.set(0, 0);
+  }
+
+  function update(dt, t) {
+    if (!U) return;
+    lastT = t;
+    U.uT.value = t;
+    if (openT < OPEN_S) {
+      openT = Math.min(OPEN_S, openT + dt);
+      const k = 1 - Math.pow(1 - openT / OPEN_S, 3);
+      U.uOpen.value.set(k, k);
+    }
+  }
+
+  function setWon(id, won) {
+    const r = RIFTS.find((q) => q.id === id);
+    if (!r || r.won === won) return;
+    r.won = won;
+    applyLit();
+  }
+
+  // portale sotto il punto della parete (z fisica, y), solo dentro l'acqua
+  function at(z, y) {
+    if (!U) return null;
+    const a = HALF - z;                             // lungo il muro, 0 = lato gradinata
+    if (a < M + 0.3 || a > L - M - 0.3 || y < BOT + 0.2 || y > TOP - 0.2) return null;
+    const r = RIFTS[a < HALF ? 0 : 1];
+    r.lit = lit(r);
+    return r;
+  }
+
+  function splash(z, y, k) {
+    if (!U || lastT - lastDrop < 0.3) return;
+    lastDrop = lastT;
+    U.uDrop.value.set(HALF - z, y, lastT, k);
+  }
+
+  return { build, enter, update, setWon, at, splash, RIFTS };
+})();
+/* ============================================================
    HUB DEI PORTALI — il livello centrale del gioco
    ------------------------------------------------------------
    Si parte da qui e qui si torna da ogni livello. È un palazzetto al
@@ -56369,6 +56772,10 @@ function collideSticks() {
    livello vinto (21-hub-7-crowd-growth.js) e, colpito tre volte su
    qualunque lato, manda i disturbatori col bastone sotto tutti i canestri
    dell'hub (21-hub-8-sticks.js; oggi di canestri non ce ne sono).
+
+   La parete DESTRA è il muro dei portali (21-hub-9-rift-wall.js): metà
+   MARE e metà SPAZIO, due specchi d'acqua sfocati sui due mondi che si
+   incontrano al centro. Ci si entra tirando la palla nell'acqua.
 
    SPENTI, MA PRONTI NEI SORGENTI (vedi PATHS_ON e VOID_FIELD_ON):
    i sentieri coi portali dei livelli e i cartelli di legno, il vortice
@@ -56485,7 +56892,7 @@ const hubLevel = (function () {
   let hubEnv = null, savedEnv = null, savedFar = null, shadowTick = 0;
   const shadowAt = { x: 0, z: 0 };        // centro attuale del riquadro d'ombra (fitSunShadow)
   let active = [];                        // sentieri davvero presenti (livelli finiti)
-  let hitBoxes = [];                      // aree invisibili toccabili dei cartelli
+  const hitBoxes = [];                      // aree invisibili toccabili dei cartelli
   let streakHold = 0;
   const zoom = { k: 0, open: false, p: null, center: new T.Vector3(), eye: new T.Vector3() };
   const _base = new T.Vector3(), _look = new T.Vector3(), _n = new T.Vector3();
@@ -57063,6 +57470,8 @@ const hubLevel = (function () {
     HubGym.build(world);
     HubCrowd.build(world);                 // pubblico di base sulle 4 gradinate
     HubSticks.build(world);                // disturbatori col bastone (una coppia per canestro dell'hub)
+    // muro dei portali: la parete destra, metà MARE e metà SPAZIO (21-hub-9)
+    HubRift.build(world, (id) => level.list.some((m) => m.id === id && !m.devOnly));
 
     if (VOID_FIELD_ON) {
       dome = buildDome();
@@ -57102,7 +57511,7 @@ const hubLevel = (function () {
   function collideHall(r) {
     const D = HALL, K = Math.SQRT1_2;
     let lim = D.HX - WALL_PAD - r;
-    if (ball.x > lim) { ball.x = lim; bounce(-1, 0, 0, 0.55); }
+    if (ball.x > lim) { if (!riftSwallow()) { ball.x = lim; bounce(-1, 0, 0, 0.55); } }
     else if (ball.x < -lim) { ball.x = -lim; bounce(1, 0, 0, 0.55); }
     lim = D.HZ - WALL_PAD - r;
     if (ball.z > lim) { ball.z = lim; bounce(0, 0, -1, 0.55); }
@@ -57125,6 +57534,21 @@ const hubLevel = (function () {
         else { const sg = dx < 0 ? -1 : 1; ball.x = bx + sg * hw; bounce(sg, 0, 0, 0.5); }
       }
     }
+  }
+
+  /* Muro dei portali (parete destra, 21-hub-9): la palla che tocca l'acqua di
+     un portale acceso ci entra e porta nel livello (true = niente rimbalzo).
+     Un portale spento (livello vinto) è acqua ferma: anello e rimbalzo. */
+  function riftSwallow() {
+    const rf = HubRift.at(ball.z, ball.y);
+    if (!rf) return false;
+    if (!rf.lit) { HubRift.splash(ball.z, ball.y, 0.5); return false; }
+    if (!rf.taken && !level.transitioning) {
+      HubRift.splash(ball.z, ball.y, 1);
+      rf.x = ball.x; rf.y = ball.y; rf.z = ball.z;
+      takePortal(rf);
+    }
+    return rf.taken;
   }
 
   /* Gradinate: sopra una pedata ci pensa il pavimento (groundAt). Qui le facce
@@ -57274,6 +57698,7 @@ const hubLevel = (function () {
     camTargetCur.set(CAM_VIEW.lookX, CAM_VIEW.lookY, -4.8);
 
     for (const p of active) p.taken = false;
+    HubRift.enter();                       // le due acque del muro si riaprono
     refreshWon();
     portalLight.visible = true;            // serve al portale $ (13-portal)
     zoom.open = false; zoom.k = 0; zoom.p = null;
@@ -57288,12 +57713,14 @@ const hubLevel = (function () {
       const won = completedLevels.has(p.id);
       if (won !== p.won) { p.won = won; paintSign(p, won); setPortalLit(p, !won); }
     }
+    for (const r of HubRift.RIFTS) HubRift.setWon(r.id, completedLevels.has(r.id));
   }
 
   function update(dt, t) {
     if (dome) dome.material.uniforms.uT.value = t;
     game.streak = streakHold;          // nell'hub un errore non spezza la serie
     HubKit.tU.value = t;
+    HubRift.update(dt, t);
     for (const p of active) if (p.update) p.update(dt, t);
     // ombre: a palla in volo a ogni frame, altrimenti ogni pochi frame (idle lenti)
     if (ball.state === "flying" || (++shadowTick % (LOW ? 8 : 4)) === 0) sun.shadow.needsUpdate = true;
