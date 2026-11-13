@@ -1581,7 +1581,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwe3lf40";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwfdvkhv";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -2524,11 +2524,11 @@ const Haptics = (() => {
   // si sente bloccando un iPhone — mai vibrazioni lunghe tipo notifica. Il web non
   // permette di regolare l'intensità: la leggerezza si ottiene solo con la durata
   // brevissima (il motorino non fa in tempo ad andare a pieno regime).
-  // ATTENZIONE AL MINIMO: sotto ~25-30 ms il motorino di molti telefoni Android
-  // non fa in tempo a partire e NON SI SENTE NULLA. È successo il 2026-11-12: con
-  // 500 ms vibrava, portato a 12 ms è diventato muto sia sul sito sia nell'app.
+  // ATTENZIONE AL MINIMO: se il tick è troppo corto il motorino non fa in tempo a
+  // partire e NON SI SENTE NULLA. Provato sul telefono dell'utente il 2026-11-13
+  // con una pagina di prova a più durate: 12 e 40 ms muti, 80 ms "perfetto".
   // Per alleggerire o rinforzare il tick si ritocca solo questo numero.
-  const TICK_MS = 40;                       // tick base dello stile aptico
+  const TICK_MS = 80;                       // tick base dello stile aptico
   const GRAB_MS = TICK_MS;                  // presa della palla
 
   function vibrate(arg) {
@@ -19390,6 +19390,11 @@ const FLICK_GRAB_LOCK_MS = 350;
 const FLICK_SPEED_ARM = () => window.innerHeight * 0.00062;
 
 const MAX_DRAG = () => window.innerHeight * 0.30;
+/* ANNULLA TIRO (tutti i tiri, mazzafionda compresa): riportando la trazione
+   vicino al punto di presa la potenza torna a ZERO e, rilasciando lì, il tiro
+   non parte. Sotto questa soglia la barra mostra 0 e la linea di mira sparisce
+   (10-physics, updateAimHelpers), così "zero" a schermo = annullato. */
+const SHOT_CANCEL_POWER = 0.10;
 // Sensibilità del movimento del TIRO (mira + potenza). <1 = meno sensibile:
 // serve trascinare di più per lo stesso effetto -> più controllo fine. Applicata
 // solo in computeLaunch (allarga il denominatore MD); NON tocca la camera.
@@ -19672,7 +19677,7 @@ function onUp(e) {
   aimDots.visible = false;
   const l = computeLaunch();
   SlingAim.afterShot();   // mira presa in automatico dal centro: si libera (09d)
-  if (l.power > 0.07) {
+  if (l.power > SHOT_CANCEL_POWER) {   // potenza riportata a zero = tiro ANNULLATO
     // la traiettoria parte dal punto della palla afferrato dal cursore
     ball.x += l.ox; ball.y += l.oy; ball.z += l.oz;
     ball.vx = l.vx; ball.vy = l.vy; ball.vz = l.vz;
@@ -21088,7 +21093,18 @@ function updateAimHelpers(t) {
     // della trazione e NON si sposta quando il timer della campana si arma o si
     // disarma. La campana resta nel tiro vero (onUp) e la segnala l'aura sotto.
     const l = computeLaunch(0);
-    if (l.power > 0) {
+    if (l.power > 0 && l.power <= SHOT_CANCEL_POWER) {
+      // ZONA DI ANNULLAMENTO (09-input): potenza tornata a zero → barra a 0 e
+      // niente linea di mira; rilasciando qui il tiro non parte.
+      powerWrap.style.opacity = 1;
+      powerFill.style.height = "0%";
+      powerWrap.style.setProperty("--p", "0");
+      powerWrap.style.setProperty("--hue", "120");
+      if (powerNum) setTextIfChanged(powerNum, 0);
+      if (powerValEl) powerValEl.style.opacity = 1;   // lo 0 resta visibile: si capisce che è annullato
+      reticle.visible = false;
+      aimDots.visible = false;
+    } else if (l.power > 0) {
       // Aura "tiro a parabola": riflette il TIMER vero (flickAmount), non la
       // linea. Verde quando la campana è armata (rilasciando ora sarebbe ad arco);
       // spenta a timer disarmato/tiro dritto. Così l'aura informa senza muovere
@@ -56531,26 +56547,28 @@ function collideSticks() {
   }
 }
 /* ============================================================
-   HUB — IL MURO DEI PORTALI (distorsione spazio-temporale)
+   HUB — IL MURO DEI PORTALI
    ------------------------------------------------------------
    La parete DESTRA del palazzetto (quella a destra della gradinata,
    x = +HX) è divisa a metà fra i primi due portali:
      - metà verso la gradinata  → MARE   (whale)
      - metà verso le spalle     → SPAZIO (space)
-   Ognuno occupa esattamente metà del muro. La superficie non è il
-   solito tunnel colorato: è una visione MOLTO sfocata e distorta del
-   livello, come se lo si guardasse attraverso uno SPECCHIO D'ACQUA
-   (onde lente, gocce che cadono e allargano anelli, riflessi). Al
-   centro del muro le due acque si scontrano: il confine ondeggia e le
-   immagini dei due mondi si mescolano.
-   Contorni eterei e colorati (fiamme fredde che salgono, colori del
-   portale) con leggere scariche elettriche che corrono lungo il bordo
-   e, ogni tanto, sul confine fra i due mondi.
+
+   MARE — portale CIRCOLARE (forma nuova, la prenderanno tutti):
+     un cerchio alto quasi quanto la parete, chiuso da un anello di
+     energia dai contorni netti (filo bianco al centro, fascia colorata,
+     due bordi scuri). Dentro, la veduta del livello attraverso uno
+     specchio d'acqua, solo un po' sfocata e mossa. Attorno all'anello il
+     muro è SFONDATO: bordo a schegge, muratura in vista nello spessore,
+     crepe che corrono nell'intonaco, e i pezzi staccati che fluttuano
+     davanti alla parete (RiftDebris, 21-hub-9b).
+
+   SPAZIO — ancora il riquadro di prima: visione molto sfocata nello
+     specchio d'acqua, contorno etereo con leggere scariche.
 
    Le "vedute" dei livelli sono dipinte UNA volta sulla GPU (GpuBake):
    cielo, mare, balena col canestro e parapetto della barca; spazio,
-   Via Lattea, pianeti con gli anelli e il pianeta-canestro. Per frame
-   costa solo lo shader del muro (un draw call).
+   Via Lattea, pianeti con gli anelli e il pianeta-canestro.
 
    Si entra tirando la palla nell'acqua (21-level-hub: collideHall).
    Un livello vinto ha l'acqua spenta e ferma: la palla rimbalza.
@@ -56567,28 +56585,39 @@ const HubRift = (function () {
   const HALF = L / 2;
   const HH = D.H - 0.6;                   // fino al cornicione
   const X = D.HX - 0.06;                  // appena davanti alla parete
-  const M = 1.1, BOT = 0.55, TOP = HH - 0.8;   // acqua: margine laterale, basso, alto (m)
   const OPEN_S = 2.4;                     // durata dell'apertura entrando nell'hub
-  const TEX_W = LOW ? 256 : 512, TEX_H = TEX_W / 2;
+  const TEX = LOW ? 256 : 512;
+
+  /* MARE: cerchio. a = posizione lungo il muro (0 = lato gradinata), y = quota del centro,
+     R = raggio fuori dall'anello, RING = spessore dell'anello, B0..B1 = quanto il muro è
+     sfondato oltre l'anello (min..max), EXT = fin dove arrivano crepe e alone. */
+  const SEA = { a: HALF / 2, y: 6.5, R: 5.6, RING: 0.42, B0: 0.30, B1: 0.95, EXT: 3.8 };
+  const SEA_RI = SEA.R - SEA.RING;        // raggio dell'acqua
+  /* SPAZIO: riquadro nella sua metà. Margine laterale, basso, alto (m). */
+  const M = 1.1, BOT = 0.55, TOP = HH - 0.8;
 
   const RIFTS = [
     { id: "whale", a: 0x1aa8d8, b: 0x7ff0ff },
     { id: "space", a: 0x7a34ff, b: 0xff6bf0 }
   ];
+  // muro sfondato: intonaco, mattoni, malta (gli stessi colori dei pezzi che fluttuano)
+  const WALL_PAL = { plaster: "#bdb6a8", brickA: "#7d4534", brickB: "#a5644a", mortar: "#8b867c" };
 
   const { bake, lin } = GpuBake;
-  let mesh = null, U = null, openT = OPEN_S, lastT = 0, lastDrop = -9;
+  const uT = { value: 0 };                // tempo, condiviso da tutti i materiali
+  let group = null, US = null, UB = null, UR = null, debris = null;
+  let openT = OPEN_S, lastT = 0, lastDrop = -9;
 
   /* =========================================================
      VEDUTE DEI LIVELLI (cotte una volta)
      ========================================================= */
+  // mare: quadrata, composta per stare in un cerchio (sole a sinistra, balena al centro-destra)
   const FRAG_SEA = `
     uniform vec3 cZen, cUp, cMid, cLow, cHaze, cSea, cSeaFar, cSun, cWhale, cWood;
     void main() {
-      float asp = uRes.x / uRes.y;
       vec2 uv = vUv;
-      float x = (uv.x - 0.5) * asp;
-      const float HOR = 0.44;
+      float x = uv.x - 0.5;
+      const float HOR = 0.46, SUNX = 0.27, WW = 0.30;
       vec3 col;
       if (uv.y >= HOR) {
         float t = pow((uv.y - HOR) / (1.0 - HOR), 0.7);
@@ -56596,7 +56625,7 @@ const HubRift = (function () {
         col = mix(col, cMid, smoothstep(0.10, 0.40, t));
         col = mix(col, cUp, smoothstep(0.35, 0.70, t));
         col = mix(col, cZen, smoothstep(0.65, 1.0, t));
-        float n = fbm(vec3(x * 1.4, t * 6.0, 2.7), 5);
+        float n = fbm(vec3(x * 2.2, t * 6.0, 2.7), 5);
         float cl = smoothstep(0.05, 0.5, n) * sfall(0.55, 0.08, t) * smoothstep(0.0, 0.05, t);
         col = mix(col, mix(vec3(0.93, 0.94, 0.96), cHaze, 0.3), cl * 0.8);
       } else {
@@ -56604,45 +56633,45 @@ const HubRift = (function () {
         col = mix(cHaze * 0.85, cSeaFar, smoothstep(0.0, 0.06, d));
         col = mix(col, cSea, smoothstep(0.05, 0.7, d));
         float z = 1.0 / (d + 0.05);
-        float w = fbm(vec3(x * z * 0.6, z * 1.8, 5.1), 4);
+        float w = fbm(vec3(x * z * 0.9, z * 1.8, 5.1), 4);
         col *= 0.85 + 0.3 * w;
         col = mix(col, vec3(0.9, 0.95, 1.0), smoothstep(0.45, 0.75, w) * 0.25 * (1.0 - d));
-        float gx = (uv.x - 0.24) * asp;         // scia del sole sull'acqua
-        float gl = exp(-gx * gx / (0.004 + 0.06 * d * d)) * smoothstep(0.1, 0.6, w * 0.5 + 0.5);
+        float gx = uv.x - SUNX;                 // scia del sole sull'acqua
+        float gl = exp(-gx * gx / (0.003 + 0.05 * d * d)) * smoothstep(0.1, 0.6, w * 0.5 + 0.5);
         col += cSun * gl * 0.8 * (1.0 - d * 0.7);
       }
       // sole basso a sinistra
-      float ds = length(vec2((uv.x - 0.24) * asp, uv.y - (HOR + 0.10)));
-      col += cSun * (sfall(0.035, 0.025, ds) * 2.0 + exp(-ds * 9.0) * 0.45);
+      float ds = length(vec2(uv.x - SUNX, uv.y - (HOR + 0.11)));
+      col += cSun * (sfall(0.04, 0.03, ds) * 2.0 + exp(-ds * 9.0) * 0.45);
 
       // balena: il dorso che affiora, col canestro appoggiato sopra
-      vec2 q = vec2((uv.x - 0.58) * asp, uv.y - (HOR - 0.10));
-      float hump = 0.075 * sqrt(max(0.0, 1.0 - pow(q.x / 0.42, 2.0)));
-      float wl = -0.012 + 0.004 * sin(q.x * 40.0);
-      float body = smoothstep(0.0, 0.006, hump - q.y) * smoothstep(wl - 0.004, wl + 0.004, q.y) * step(abs(q.x), 0.42);
+      vec2 q = vec2(uv.x - 0.56, uv.y - (HOR - 0.10));
+      float hump = 0.075 * sqrt(max(0.0, 1.0 - pow(q.x / WW, 2.0)));
+      float wl = -0.012 + 0.004 * sin(q.x * 44.0);
+      float body = smoothstep(0.0, 0.006, hump - q.y) * smoothstep(wl - 0.004, wl + 0.004, q.y) * step(abs(q.x), WW);
       vec3 skin = cWhale * (0.55 + 0.9 * clamp(q.y / 0.08, 0.0, 1.0)) * (0.85 + 0.3 * fbm(vec3(q * 30.0, 8.0), 3));
       col = mix(col, skin, body);
-      float foam = exp(-pow((q.y - wl) / 0.006, 2.0)) * step(abs(q.x), 0.42);
+      float foam = exp(-pow((q.y - wl) / 0.006, 2.0)) * step(abs(q.x), WW);
       col = mix(col, vec3(0.92, 0.96, 1.0), foam * 0.6);
       // soffio
       float sy = q.y - 0.06;
-      float sp = exp(-pow((q.x + 0.30) / (0.015 + max(sy, 0.0) * 0.45), 2.0)) * smoothstep(0.0, 0.04, sy) * sfall(0.30, 0.10, sy);
+      float sp = exp(-pow((q.x + 0.20) / (0.015 + max(sy, 0.0) * 0.45), 2.0)) * smoothstep(0.0, 0.04, sy) * sfall(0.26, 0.09, sy);
       col = mix(col, vec3(0.95, 0.97, 1.0), sp * (0.45 + 0.4 * fbm(vec3(q * 25.0, 1.0), 3)));
       // canestro: palo, tabellone bianco, ferro arancio
-      float h0 = 0.075, hx = q.x - 0.04;
-      float pole = step(abs(hx), 0.0035) * step(h0 - 0.01, q.y) * step(q.y, h0 + 0.13);
+      float h0 = 0.073, hx = q.x - 0.04;
+      float pole = step(abs(hx), 0.0045) * step(h0 - 0.01, q.y) * step(q.y, h0 + 0.13);
       vec2 bb = vec2(hx, q.y - (h0 + 0.15));
-      float board = step(abs(bb.x), 0.042) * step(abs(bb.y), 0.03);
-      float rim = step(abs(hx + 0.028), 0.022) * step(abs(q.y - (h0 + 0.128)), 0.003);
+      float board = step(abs(bb.x), 0.046) * step(abs(bb.y), 0.032);
+      float rim = step(abs(hx + 0.03), 0.024) * step(abs(q.y - (h0 + 0.128)), 0.004);
       col = mix(col, vec3(0.30, 0.31, 0.33), pole);
       col = mix(col, vec3(0.95), board);
       col = mix(col, vec3(1.0, 0.35, 0.06), rim);
 
       // parapetto della barca in primo piano
-      float rx = x / (asp * 0.5);
-      float rail = 0.10 + 0.05 * (1.0 - rx * rx);
+      float rx = x / 0.5;
+      float rail = 0.13 + 0.05 * (1.0 - rx * rx);
       if (uv.y < rail) {
-        float pl = fbm(vec3(x * 2.0, uv.y * 40.0, 1.0), 3);
+        float pl = fbm(vec3(x * 3.0, uv.y * 40.0, 1.0), 3);
         vec3 wood = cWood * (0.7 + 0.3 * pl) * (0.55 + 0.45 * uv.y / rail);
         wood = mix(wood, cWood * 1.5, exp(-pow((rail - uv.y) / 0.006, 2.0)));
         col = mix(col, wood, smoothstep(rail, rail - 0.004, uv.y));
@@ -56749,7 +56778,7 @@ const HubRift = (function () {
       cHaze: { value: lin("#dbe7e6") }, cSea: { value: lin("#0a3f60") },
       cSeaFar: { value: lin("#2f6f8f") }, cSun: { value: lin("#fff1d6") },
       cWhale: { value: lin("#56606c") }, cWood: { value: lin("#7a5232") }
-    }, TEX_W, TEX_H, true, 1);
+    }, TEX, TEX, true, 1);
     const space = bake(FRAG_SPACE, {
       cJ1: { value: lin("#c9a26a") }, cJ2: { value: lin("#e6cfa0") }, cJs: { value: lin("#c34a33") },
       cI1: { value: lin("#8fb6d6") }, cI2: { value: lin("#c4dcec") },
@@ -56757,30 +56786,15 @@ const HubRift = (function () {
       cK1: { value: lin("#4c4568") }, cK2: { value: lin("#a99ec6") },
       cAtJ: { value: lin("#ffcf96") }, cAtI: { value: lin("#9fd4ff") }, cAtK: { value: lin("#a996ff") },
       cB1: { value: lin("#7f6bff") }, cB2: { value: lin("#ffd2b0") }
-    }, TEX_W, TEX_H, true, 1);
+    }, TEX, TEX / 2, true, 1);
     return { sea, space };
   }
 
   /* =========================================================
-     LO SPECCHIO D'ACQUA SUL MURO
+     PEZZI COMUNI DEGLI SHADER
      ========================================================= */
-  const VERT = `
-    uniform vec2 uSize;
-    varying vec2 vP;
-    void main() {
-      vP = uv * uSize;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `;
-
-  const FRAG = `
-    uniform sampler2D tA, tB;
-    uniform float uT;
-    uniform vec2 uSize, uOpen, uLit;
-    uniform vec4 uDrop;
-    uniform vec3 uA1, uA2, uB1, uB2;
-    varying vec2 vP;
-
+  const NOISE = `
+    float sfall(float hi, float lo, float x) { return 1.0 - smoothstep(lo, hi, x); }
     float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
     float vnoise(vec2 p) {
       vec2 i = floor(p), f = fract(p);
@@ -56788,41 +56802,222 @@ const HubRift = (function () {
       return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
     }
     float fbm3(vec2 p) { return 0.5 * vnoise(p) + 0.3 * vnoise(p * 2.07 + 3.1) + 0.2 * vnoise(p * 4.13 + 7.7); }
-
-    // la veduta del livello, molto sfocata: mipmap alta (+ letture sparse su PC)
+  `;
+  // la veduta del livello sfocata: mipmap alta (+ letture sparse su PC, larghe TAP in UV)
+  const LOOK = `
     vec3 look(sampler2D tex, vec2 uv) {
       vec3 c = texture2D(tex, uv, BLUR).rgb;
       #ifdef SOFT
-      c += texture2D(tex, uv + vec2(0.014, 0.022), BLUR).rgb;
-      c += texture2D(tex, uv + vec2(-0.018, -0.009), BLUR).rgb;
-      c += texture2D(tex, uv + vec2(0.007, -0.025), BLUR).rgb;
+      c += texture2D(tex, uv + vec2(0.64, 1.0) * TAP, BLUR).rgb;
+      c += texture2D(tex, uv + vec2(-0.82, -0.41) * TAP, BLUR).rgb;
+      c += texture2D(tex, uv + vec2(0.32, -1.14) * TAP, BLUR).rgb;
       c *= 0.25;
       #endif
       return c;
     }
+  `;
+  const f2 = (v) => v.toFixed(3);
 
+  /* =========================================================
+     MARE — IL DISCO: acqua + anello dai contorni netti
+     ========================================================= */
+  const VERT_DISC = `
+    varying vec2 vP;
     void main() {
-      vec2 P = vP;                                 // metri: x lungo il muro (0 = lato gradinata), y altezza
-      float L = uSize.x, Hh = uSize.y, HALF = L * 0.5, TOP = Hh - ${(HH - TOP).toFixed(2)};
-      const float M = ${M.toFixed(2)}, BOT = ${BOT.toFixed(2)};
-      float t = uT;
+      vP = position.xy;                            // metri dal centro del portale
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+  const FRAG_DISC = `
+    uniform sampler2D tView;
+    uniform float uT, uOpen, uLit;
+    uniform vec4 uDrop;
+    uniform vec3 uC1, uC2;
+    varying vec2 vP;
+    const float R = ${f2(SEA.R)}, RI = ${f2(SEA_RI)}, PI2 = 6.2831853;
+    ${NOISE}
+    ${LOOK}
+    void main() {
+      vec2 p = vP;
+      float r = length(p), t = uT, lit = uLit;
+      float ang = atan(p.y, p.x) / PI2 + 0.5;       // 0..1 attorno al cerchio
 
-      // confine fra i due mondi: ondeggia
-      float seam = HALF + 0.7 * sin(P.y * 0.55 + t * 0.8) + 0.9 * (fbm3(vec2(P.y * 0.35, t * 0.3)) - 0.5);
-      float side = smoothstep(seam - 1.3, seam + 1.3, P.x);     // 0 mare, 1 spazio
-      float lit = mix(uLit.x, uLit.y, side);
-      float open = mix(uOpen.x, uOpen.y, side);
+      // apertura: l'acqua si allarga dal centro
+      float fl = fbm3(p * 0.55 + vec2(0.0, -t * 0.7));
+      float om = smoothstep(0.0, 0.12, uOpen * 1.3 - r / RI + (fl - 0.5) * 0.25);
+
+      // ---- superficie dell'acqua: spostamento ----
+      vec2 w = vec2(sin(p.y * 0.8 + t * 1.2 + 1.5 * sin(p.x * 0.31 + t * 0.4)),
+                    cos(p.x * 0.65 - t * 1.0 + 1.2 * sin(p.y * 0.47 - t * 0.3))) * 0.10;
+      w += vec2(sin(p.x * 1.7 + p.y * 1.2 + t * 2.0), sin(-p.x * 1.3 + p.y * 2.1 - t * 1.6)) * 0.05;
+      // gocce che cadono a caso: anelli concentrici
+      for (int i = 0; i < DROPS; i++) {
+        float fi = float(i), per = 2.6 + fi * 0.9;
+        float k = t / per + fi * 0.37;
+        float id = floor(k), ph = fract(k);
+        float ca = h21(vec2(id, fi)) * PI2, cr = sqrt(h21(vec2(fi, id + 3.1))) * RI * 0.8;
+        vec2 v = p - cr * vec2(cos(ca), sin(ca));
+        float d = length(v) + 1e-3, rad = ph * 6.0;
+        w += v / d * sin((d - rad) * 3.2) * exp(-abs(d - rad) * 0.9) * (1.0 - ph) * 0.16;
+      }
+      // la palla che tocca l'acqua
+      float di = t - uDrop.z;
+      if (di > 0.0 && di < 3.5) {
+        vec2 v = p - uDrop.xy;
+        float d = length(v) + 1e-3, rad = di * 5.0;
+        w += v / d * sin((d - rad) * 3.0) * exp(-abs(d - rad) * 0.7) * exp(-di * 1.1) * uDrop.w * 0.5;
+      }
+      w *= mix(0.1, 1.0, lit) * om;                 // spento: acqua quasi ferma
+
+      // ---- la veduta attraverso l'acqua (solo un po' mossa) ----
+      vec3 img = look(tView, 0.5 + (p + w * 0.8) / (2.0 * RI));
+      vec3 n = normalize(vec3(-w * 2.2, 1.0));
+      float spec = pow(max(dot(n, normalize(vec3(0.25, 0.55, 1.0))), 0.0), 40.0);
+      float caus = pow(abs(sin(w.x * 9.0 + t * 0.6) * sin(w.y * 8.0 - t * 0.5)), 3.0);
+      img *= 0.94 + 0.16 * (n.x + n.y);
+      img = mix(img, img * (0.8 + 0.4 * uC1), 0.15);                   // velo del colore del portale
+      img += (vec3(0.9, 0.95, 1.0) * spec * 0.25 + uC2 * caus * 0.05) * lit;
+      img *= 1.0 - 0.30 * smoothstep(RI - 1.4, RI, r);                 // l'acqua sprofonda sotto l'anello
+      img += uC2 * exp(-(RI - r) * 2.4) * 0.28 * lit;                  // e ne riflette la luce
+      img = mix(vec3(dot(img, vec3(0.3, 0.55, 0.15))) * 0.16, img, lit);   // spento: scuro
+      img = mix(vec3(0.006, 0.012, 0.02), img, om);                    // non ancora aperto: buio
+
+      // ---- anello: bordi scuri netti, fascia colorata, filo bianco al centro ----
+      float e = r - RI;
+      float prof = 1.0 - abs(clamp(e / (R - RI), 0.0, 1.0) * 2.0 - 1.0);   // 0 ai bordi, 1 in mezzo
+      float comet = pow(0.5 + 0.5 * cos((ang - t * 0.03) * PI2 * 3.0), 10.0);   // tre luci che girano
+      float flow = 0.5 + 0.5 * sin(ang * PI2 * 9.0 - t * 0.9);
+      vec3 ring = mix(uC1 * 0.45, uC1 * 1.1, prof);
+      ring += uC2 * pow(prof, 3.0) * (0.7 + 0.5 * comet + 0.15 * flow);
+      ring += vec3(1.0) * smoothstep(0.78, 0.94, prof) * (0.55 + 0.9 * comet);
+      ring *= mix(0.14, 1.0, lit);
+      ring = mix(vec3(0.008, 0.022, 0.045), ring, smoothstep(0.16, 0.30, prof));
+
+      gl_FragColor = vec4(mix(img, ring, smoothstep(-0.02, 0.02, e)), 1.0);
+      #include <colorspace_fragment>
+    }
+  `;
+
+  /* =========================================================
+     MARE — IL MURO SFONDATO attorno all'anello
+     bordo a schegge, muratura nello spessore, crepe, luce del portale, scariche
+     ========================================================= */
+  const VERT_BREAK = `
+    varying vec2 vP;
+    void main() {
+      vP = position.xy;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+  const FRAG_BREAK = `
+    uniform float uT, uLit;
+    uniform vec3 uC1, uC2, uPlaster, uBrickA, uBrickB, uMortar;
+    varying vec2 vP;
+    const float R = ${f2(SEA.R)}, B0 = ${f2(SEA.B0)}, B1 = ${f2(SEA.B1)}, CY = ${f2(SEA.y)}, PI2 = 6.2831853;
+    ${NOISE}
+    // rumore a tratti dritti, periodico su n celle attorno al cerchio: dà un bordo a schegge
+    float lnoise(float a, float n, float seed) {
+      float x = a * n, i = floor(x);
+      return mix(h21(vec2(mod(i, n), seed)), h21(vec2(mod(i + 1.0, n), seed)), x - i);
+    }
+    // fin dove il muro è venuto via (m dal centro) a un dato angolo
+    float breakR(float a) {
+      return R + B0 + (B1 - B0) * (0.72 * lnoise(a, 19.0, 3.0) + 0.28 * lnoise(a, 53.0, 8.0));
+    }
+    // crepe che partono dal bordo rotto: una per cella, lunga a caso, che si assottiglia
+    float cracks(float a, float r, float rb, float n, float len, float seed) {
+      float x = a * n, id = mod(floor(x), n), f = fract(x) - 0.5;
+      float h = h21(vec2(id, seed));
+      if (h < 0.22) return 0.0;
+      float k = (r - rb) / (len * h);
+      if (k < 0.0 || k > 1.0) return 0.0;
+      float wob = (vnoise(vec2(id * 7.3 + seed, r * 1.3)) - 0.5) * 0.6;
+      float d = abs(f - wob) * (PI2 * r / n);        // distanza (m) dalla linea
+      float w = 0.10 * (1.0 - k) + 0.02;
+      return (1.0 - smoothstep(w * 0.4, w, d)) * (1.0 - k * k * k);
+    }
+    void main() {
+      vec2 p = vP;
+      float Y = p.y + CY;                            // quota sulla parete
+      if (Y < 0.0 || Y > ${f2(HH)}) discard;
+      float r = length(p), t = uT;
+      float a = atan(p.y, p.x) / PI2 + 0.5;
+      float rb = breakR(a);
+      float glowK = mix(0.10, 1.0, uLit);
+      float mW = smoothstep(-0.02, 0.02, r - rb);    // 1 = muro intatto, 0 = sfondato
+
+      // ---- muro intatto: crepe scure, bordo scheggiato, luce del portale ----
+      float c = max(cracks(a, r, rb, 23.0, 2.6, 1.0), 0.8 * cracks(a + 0.019, r, rb, 41.0, 1.4, 5.0));
+      float wa = max(c * 0.88, exp(-max(r - rb, 0.0) * 10.0) * 0.45);
+      vec3 wc = vec3(0.025, 0.025, 0.03) * wa;
+      wc += uC1 * exp(-max(r - R, 0.0) * 1.15) * 0.42 * (0.85 + 0.15 * sin(t * 1.3)) * glowK * (1.0 - 0.6 * wa);
+
+      // ---- muratura in vista nello spessore: corsi di mattoni, più bui verso il fondo ----
+      float k = clamp((r - R) / max(rb - R, 0.001), 0.0, 1.0);     // 0 al portale, 1 al filo del muro
+      float n2 = vnoise(p * 9.0 + 4.0);
+      vec2 bq = vec2(p.x / 0.62, Y / 0.30);
+      bq.x += 0.5 * mod(floor(bq.y), 2.0);
+      vec2 bf = fract(bq);
+      float dm = min(min(bf.x, 1.0 - bf.x) * 0.62, min(bf.y, 1.0 - bf.y) * 0.30);
+      vec3 stone = mix(uBrickA, uBrickB, h21(floor(bq))) * (0.8 + 0.4 * n2);
+      stone = mix(stone, uMortar * (0.85 + 0.3 * n2), 1.0 - smoothstep(0.012, 0.03, dm));
+      stone *= 0.28 + 0.72 * k;
+      // lo strato d'intonaco sul filo esterno
+      float wl = 0.70 + 0.30 * exp(-pow((Y - 2.5) / 3.2, 2.0)) - 0.28 * (Y / ${f2(D.H)});
+      stone = mix(stone, uPlaster * wl * (0.92 + 0.12 * n2), smoothstep(0.11, 0.06, rb - r));
+      stone += uC1 * exp(-max(r - R, 0.0) * 2.6) * 0.55 * glowK;   // la luce dell'anello
+
+      // ---- scariche fra l'anello e il bordo rotto ----
+      float seg8 = a * 8.0, seg = floor(seg8), fs = fract(seg8);
+      float along = a * PI2 * R;
+      float jag = (fbm3(vec2(along * 1.3, t * 9.0)) - 0.5) * 1.0 + (vnoise(vec2(along * 6.0, t * 14.0)) - 0.5) * 0.25;
+      float b = abs(r - R - 0.45 - jag);
+      float tk = t * 6.0 + h21(vec2(seg, 1.7)) * 6.0;
+      float on = step(0.88, h21(vec2(seg, floor(tk)))) * (1.0 - fract(tk)) * smoothstep(0.0, 0.15, fs) * sfall(1.0, 0.85, fs);
+      vec3 add = (vec3(1.0) * exp(-b * 30.0) * 1.1 + mix(uC1, uC2, 0.5) * exp(-b * 6.0) * 0.4) * on * uLit;
+
+      // alfa premoltiplicato: sul muro intatto solo crepe e luce, sullo sfondato la muratura piena
+      gl_FragColor = vec4(wc * mW + stone * (1.0 - mW) + add, wa * mW + (1.0 - mW));
+      #include <colorspace_fragment>
+    }
+  `;
+
+  /* =========================================================
+     SPAZIO — LO SPECCHIO D'ACQUA nel riquadro (com'era)
+     ========================================================= */
+  const VERT_RECT = `
+    uniform vec2 uSize;
+    varying vec2 vP;
+    void main() {
+      vP = uv * uSize;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `;
+  const FRAG_RECT = `
+    uniform sampler2D tView;
+    uniform float uT, uOpen, uLit;
+    uniform vec2 uSize;
+    uniform vec4 uDrop;
+    uniform vec3 uC1, uC2;
+    varying vec2 vP;
+    ${NOISE}
+    ${LOOK}
+    void main() {
+      vec2 P = vP;                                 // metri: x dal centro del muro verso le spalle, y altezza
+      float W = uSize.x, Hh = uSize.y, TOP = Hh - ${(HH - TOP).toFixed(2)};
+      const float M = ${M.toFixed(2)}, BOT = ${BOT.toFixed(2)};
+      float t = uT, lit = uLit;
 
       // bordo: distanza (m) dal rettangolo dell'acqua, sfrangiata da un rumore che sale
-      float dx = min(P.x - M, L - M - P.x), dy = min(P.y - BOT, TOP - P.y);
+      float dx = min(P.x - M, W - M - P.x), dy = min(P.y - BOT, TOP - P.y);
       float e = min(dx, dy);
       float fl = fbm3(P * 0.55 + vec2(0.0, -t * 0.7));
       float eN = e + (fl - 0.5) * 1.6;
 
-      // apertura: l'acqua si allarga dal centro di ciascun portale
-      vec2 hs = vec2(HALF * 0.5 - M, (TOP - BOT) * 0.5);
-      vec2 cq = (P - vec2(P.x < HALF ? HALF * 0.5 : HALF * 1.5, (BOT + TOP) * 0.5)) / hs;
-      float om = smoothstep(0.0, 0.18, open * 1.65 - length(cq) + (fl - 0.5) * 0.35);
+      // apertura: l'acqua si allarga dal centro
+      vec2 hs = vec2(W * 0.5 - M, (TOP - BOT) * 0.5);
+      vec2 cq = (P - vec2(W * 0.5, (BOT + TOP) * 0.5)) / hs;
+      float om = smoothstep(0.0, 0.18, uOpen * 1.65 - length(cq) + (fl - 0.5) * 0.35);
       float m = smoothstep(0.0, 0.9, eN) * om;    // copertura dell'acqua
 
       // ---- superficie dell'acqua: spostamento (m) ----
@@ -56834,7 +57029,7 @@ const HubRift = (function () {
         float fi = float(i), per = 2.6 + fi * 0.9;
         float k = t / per + fi * 0.37;
         float id = floor(k), ph = fract(k);
-        vec2 c = vec2(M + 2.0 + h21(vec2(id, fi)) * (L - 2.0 * M - 4.0), BOT + 1.5 + h21(vec2(fi, id + 3.1)) * (TOP - BOT - 3.0));
+        vec2 c = vec2(M + 2.0 + h21(vec2(id, fi)) * (W - 2.0 * M - 4.0), BOT + 1.5 + h21(vec2(fi, id + 3.1)) * (TOP - BOT - 3.0));
         vec2 v = P - c;
         float d = length(v) + 1e-3, rad = ph * 7.0;
         w += v / d * sin((d - rad) * 3.2) * exp(-abs(d - rad) * 0.9) * (1.0 - ph) * 0.16;
@@ -56846,40 +57041,31 @@ const HubRift = (function () {
         float d = length(v) + 1e-3, rad = di * 5.0;
         w += v / d * sin((d - rad) * 3.0) * exp(-abs(d - rad) * 0.7) * exp(-di * 1.1) * uDrop.w * 0.5;
       }
-      // dove i due mondi si incontrano le onde si scontrano
-      float sz = exp(-pow((P.x - seam) / 1.7, 2.0));
-      w += vec2(sin(P.y * 2.6 - t * 3.6) + 0.6 * sin(P.y * 5.1 + t * 4.4), cos(P.y * 2.1 + t * 3.0)) * 0.20 * sz;
       w *= mix(0.1, 1.0, lit) * om;                // spento: acqua quasi ferma
 
       // ---- la veduta vista attraverso l'acqua ----
       vec2 off = w * vec2(0.09, 0.12);
       float vy = clamp((P.y - BOT) / (TOP - BOT), 0.0, 1.0) + off.y;
-      float uA = (P.x - M) / (HALF - M), uB = (P.x - HALF) / (HALF - M);
-      vec3 cA = vec3(0.0), cB = vec3(0.0);
-      if (side < 0.999) cA = look(tA, vec2(1.0 - abs(1.0 - uA) + off.x, vy));
-      if (side > 0.001) cB = look(tB, vec2(abs(uB) + off.x, vy));
-      vec3 img = mix(cA, cB, side);
+      vec3 img = look(tView, vec2(P.x / (W - M) + off.x, vy));
 
-      vec3 g1 = mix(uA1, uB1, side), g2 = mix(uA2, uB2, side);
       vec3 n = normalize(vec3(-w * 2.2, 1.0));
       float spec = pow(max(dot(n, normalize(vec3(0.25, 0.55, 1.0))), 0.0), 40.0);
       float caus = pow(abs(sin(w.x * 9.0 + t * 0.6) * sin(w.y * 8.0 - t * 0.5)), 3.0);
       img *= 0.9 + 0.22 * (n.x + n.y);
-      img = mix(img, img * (0.75 + 0.5 * g1), 0.25);          // velo del colore del portale
-      img += (vec3(0.9, 0.95, 1.0) * spec * 0.3 + g2 * caus * 0.07) * lit;
-      img += mix(uA2, uB2, 0.5 + 0.5 * sin(P.y * 0.7 + t)) * sz * 0.08 * lit;   // bruma sul confine
+      img = mix(img, img * (0.75 + 0.5 * uC1), 0.25);          // velo del colore del portale
+      img += (vec3(0.9, 0.95, 1.0) * spec * 0.3 + uC2 * caus * 0.07) * lit;
       img = mix(vec3(dot(img, vec3(0.3, 0.55, 0.15))) * 0.16, img, lit);       // spento: scuro
 
       // ---- contorno etereo ----
       float hueN = fbm3(P * 0.35 + vec2(t * 0.25, -t * 0.4));
-      vec3 gcol = mix(g1, g2, smoothstep(0.3, 0.7, hueN));
+      vec3 gcol = mix(uC1, uC2, smoothstep(0.3, 0.7, hueN));
       float wisp = fbm3(vec2(P.x * 0.7 + P.y * 0.25, P.y * 0.7) + vec2(0.0, -t * 1.1));
       float halo = exp(-abs(eN - 0.15) * 1.6) * (0.35 + 0.9 * wisp * wisp);
       float rimL = exp(-abs(eN - 0.3) * 6.0) * (0.5 + 0.5 * wisp);
       vec3 add = gcol * (halo * 0.55 + rimL * 0.6) * om * mix(0.06, 1.0, lit);
 
       // ---- scariche elettriche lungo il bordo ----
-      float along = dx < dy ? P.y + (P.x > HALF ? 40.0 : 0.0) : P.x + (P.y > Hh * 0.5 ? 80.0 : 0.0);
+      float along = dx < dy ? P.y + (P.x > W * 0.5 ? 40.0 : 0.0) : P.x + (P.y > Hh * 0.5 ? 80.0 : 0.0);
       float jag = (fbm3(vec2(along * 1.3, t * 9.0)) - 0.5) * 1.1 + (vnoise(vec2(along * 6.0, t * 14.0)) - 0.5) * 0.25;
       float b = abs(eN - 0.25 - jag);
       float sg = along * 0.22, seg = floor(sg);
@@ -56887,75 +57073,103 @@ const HubRift = (function () {
       float on = step(0.86, h21(vec2(seg, floor(tk)))) * (1.0 - fract(tk))
                * smoothstep(0.0, 0.15, fract(sg)) * sfall(1.0, 0.85, fract(sg));
       add += (vec3(1.0) * exp(-b * 30.0) * 1.2 + gcol * exp(-b * 6.0) * 0.45) * on * lit * om;
-      // e ogni tanto sul confine fra i due mondi
-      float bs = abs(P.x - seam - (fbm3(vec2(P.y * 1.1, t * 8.0)) - 0.5) * 1.4);
-      float ssg = floor(P.y * 0.3), stk = t * 5.0 + h21(vec2(ssg, 9.1)) * 5.0;
-      float son = step(0.82, h21(vec2(ssg + 31.0, floor(stk)))) * (1.0 - fract(stk));
-      add += (vec3(1.0) * exp(-bs * 26.0) + mix(uA2, uB2, 0.5) * exp(-bs * 5.0) * 0.4) * son * min(uLit.x, uLit.y) * m;
 
-      add *= smoothstep(0.0, 0.6, min(P.x, L - P.x)) * smoothstep(0.0, 0.25, P.y) * smoothstep(0.0, 0.4, Hh - P.y);
+      add *= smoothstep(0.0, 0.6, min(P.x, W - P.x)) * smoothstep(0.0, 0.25, P.y) * smoothstep(0.0, 0.4, Hh - P.y);
       // alfa premoltiplicato: l'acqua copre il muro, bagliore e scariche si sommano
       gl_FragColor = vec4(img * m + add, m);
       #include <colorspace_fragment>
     }
   `;
 
-  function sfallGLSL() {
-    return "float sfall(float hi, float lo, float x) { return 1.0 - smoothstep(lo, hi, x); }\n";
+  /* =========================================================
+     COSTRUZIONE
+     ========================================================= */
+  // pannello appoggiato alla parete: cx = posizione lungo il muro (m dal lato gradinata), d = stacco dal muro
+  function panel(geo, mat, cx, cy, d, order) {
+    const m = new T.Mesh(geo, mat);
+    m.rotation.y = -Math.PI / 2;                    // guarda verso il centro della sala (-x)
+    m.position.set(X - d, cy, cx - HALF);
+    m.renderOrder = order;
+    return m;
   }
-
-  function build(parent, available) {
-    if (mesh) { parent.add(mesh); return; }
-    const views = bakeViews();
-    const c = (hex) => lin(hex);
-    U = {
-      tA: { value: views.sea }, tB: { value: views.space },
-      uT: { value: 0 },
-      uSize: { value: new T.Vector2(L, HH) },
-      uOpen: { value: new T.Vector2(1, 1) },
-      uLit: { value: new T.Vector2(1, 1) },
-      uDrop: { value: new T.Vector4(0, 0, -99, 0) },
-      uA1: { value: c(RIFTS[0].a) }, uA2: { value: c(RIFTS[0].b) },
-      uB1: { value: c(RIFTS[1].a) }, uB2: { value: c(RIFTS[1].b) }
-    };
-    const defines = { BLUR: "2.4", DROPS: LOW ? 2 : 3 };
-    if (!LOW) defines.SOFT = "";
-    const mat = new T.ShaderMaterial({
-      uniforms: U, defines,
-      vertexShader: VERT,
-      fragmentShader: sfallGLSL() + FRAG,
+  function material(vert, frag, uniforms, defines) {
+    return new T.ShaderMaterial({
+      uniforms, defines: defines || {}, vertexShader: vert, fragmentShader: frag,
       transparent: true, premultipliedAlpha: true, depthWrite: false,
       fog: false, toneMapped: false
     });
-    mesh = new T.Mesh(new T.PlaneGeometry(L, HH), mat);
-    mesh.rotation.y = -Math.PI / 2;                 // guarda verso il centro della sala (-x)
-    mesh.position.set(X, HH / 2, 0);                // uv.x = 0 sul lato della gradinata
-    mesh.renderOrder = 2;
-    for (const r of RIFTS) { r.available = available(r.id); r.won = false; r.taken = false; }
-    applyLit();
-    parent.add(mesh);
   }
 
-  function applyLit() {
-    if (!U) return;
-    U.uLit.value.set(lit(RIFTS[0]) ? 1 : 0, lit(RIFTS[1]) ? 1 : 0);
+  function build(parent, available) {
+    if (group) { parent.add(group); return; }
+    const views = bakeViews();
+    const sea = RIFTS[0], sp = RIFTS[1];
+    const drop = () => ({ value: new T.Vector4(0, 0, -99, 0) });
+    const soft = (blur, tap) => {
+      const d = { BLUR: blur, TAP: tap, DROPS: LOW ? 2 : 3 };
+      if (!LOW) d.SOFT = "";
+      return d;
+    };
+    group = new T.Group();
+
+    // MARE: prima il muro sfondato, sopra il disco (il suo bordo copre l'attacco)
+    UB = {
+      uT, uLit: { value: 1 },
+      uC1: { value: lin(sea.a) }, uC2: { value: lin(sea.b) },
+      uPlaster: { value: lin(WALL_PAL.plaster) }, uBrickA: { value: lin(WALL_PAL.brickA) },
+      uBrickB: { value: lin(WALL_PAL.brickB) }, uMortar: { value: lin(WALL_PAL.mortar) }
+    };
+    group.add(panel(new T.RingGeometry(SEA.R - 0.08, SEA.R + SEA.EXT, 72, 1),
+      material(VERT_BREAK, FRAG_BREAK, UB), SEA.a, SEA.y, 0, 2));
+    US = {
+      tView: { value: views.sea }, uT, uOpen: { value: 1 }, uLit: { value: 1 }, uDrop: drop(),
+      uC1: { value: lin(sea.a) }, uC2: { value: lin(sea.b) }
+    };
+    group.add(panel(new T.CircleGeometry(SEA.R, 96),
+      material(VERT_DISC, FRAG_DISC, US, soft("1.8", "0.008")), SEA.a, SEA.y, 0.02, 3));
+    // i pezzi di muro che fluttuano davanti alla parete (21-hub-9b)
+    debris = RiftDebris.build(group, {
+      x: D.HX, z: SEA.a - HALF, y: SEA.y, R: SEA.R, yMin: 0.7, yMax: HH - 0.6,
+      glow: lin(sea.b), pal: WALL_PAL
+    });
+
+    // SPAZIO: il riquadro nella sua metà
+    UR = {
+      tView: { value: views.space }, uT, uOpen: { value: 1 }, uLit: { value: 1 }, uDrop: drop(),
+      uSize: { value: new T.Vector2(HALF, HH) },
+      uC1: { value: lin(sp.a) }, uC2: { value: lin(sp.b) }
+    };
+    group.add(panel(new T.PlaneGeometry(HALF, HH),
+      material(VERT_RECT, FRAG_RECT, UR, soft("2.4", "0.022")), HALF * 1.5, HH / 2, 0, 2));
+
+    for (const r of RIFTS) { r.available = available(r.id); r.won = false; r.taken = false; }
+    applyLit();
+    parent.add(group);
   }
+
   const lit = (r) => r.available && !r.won;
+  function applyLit() {
+    if (!group) return;
+    const s = lit(RIFTS[0]) ? 1 : 0;
+    US.uLit.value = UB.uLit.value = s;
+    debris.setLit(s);
+    UR.uLit.value = lit(RIFTS[1]) ? 1 : 0;
+  }
 
   function enter() {
     openT = 0;
     for (const r of RIFTS) r.taken = false;
-    if (U) U.uOpen.value.set(0, 0);
+    if (group) US.uOpen.value = UR.uOpen.value = 0;
   }
 
   function update(dt, t) {
-    if (!U) return;
+    if (!group) return;
     lastT = t;
-    U.uT.value = t;
+    uT.value = t;
+    debris.update(t);
     if (openT < OPEN_S) {
       openT = Math.min(OPEN_S, openT + dt);
-      const k = 1 - Math.pow(1 - openT / OPEN_S, 3);
-      U.uOpen.value.set(k, k);
+      US.uOpen.value = UR.uOpen.value = 1 - Math.pow(1 - openT / OPEN_S, 3);
     }
   }
 
@@ -56968,21 +57182,192 @@ const HubRift = (function () {
 
   // portale sotto il punto della parete (z fisica, y), solo dentro l'acqua
   function at(z, y) {
-    if (!U) return null;
+    if (!group) return null;
     const a = HALF - z;                             // lungo il muro, 0 = lato gradinata
-    if (a < M + 0.3 || a > L - M - 0.3 || y < BOT + 0.2 || y > TOP - 0.2) return null;
-    const r = RIFTS[a < HALF ? 0 : 1];
+    let r = null;
+    if (Math.hypot(a - SEA.a, y - SEA.y) < SEA_RI) r = RIFTS[0];
+    else if (a > HALF + M + 0.3 && a < L - M - 0.3 && y > BOT + 0.2 && y < TOP - 0.2) r = RIFTS[1];
+    if (!r) return null;
     r.lit = lit(r);
     return r;
   }
 
   function splash(z, y, k) {
-    if (!U || lastT - lastDrop < 0.3) return;
+    if (!group || lastT - lastDrop < 0.3) return;
     lastDrop = lastT;
-    U.uDrop.value.set(HALF - z, y, lastT, k);
+    const a = HALF - z;
+    if (a < HALF) US.uDrop.value.set(a - SEA.a, y - SEA.y, lastT, k);
+    else UR.uDrop.value.set(a - HALF, y, lastT, k);
   }
 
   return { build, enter, update, setWon, at, splash, RIFTS };
+})();
+/* ============================================================
+   HUB — I PEZZI DI MURO CHE FLUTTUANO ATTORNO A UN PORTALE
+   ------------------------------------------------------------
+   Il portale ha sfondato la parete (21-hub-9): i pezzi staccati non
+   cadono, restano sospesi davanti al muro attorno all'anello. Ognuno
+   è una scheggia a pianta irregolare: la faccia davanti è l'intonaco
+   della parete, il resto è muratura (mattoni e malta). Girano piano
+   su se stessi e dondolano; i più grossi stanno vicino al bordo
+   rotto, i più piccoli si allontanano. Nessuno copre l'acqua del
+   portale: la palla ci entra senza attraversarli.
+
+   Solo scena: non hanno fisica. Due InstancedMesh (due forme), luce
+   calcolata nello shader: quella della sala dall'alto più quella
+   colorata del portale sulle facce che lo guardano.
+
+   RiftDebris.build(parent, o) → { update(t), setLit(k) }
+     o.x          x della parete (i pezzi stanno verso la sala)
+     o.z, o.y     centro del portale sulla parete (mondo)
+     o.R          raggio del portale
+     o.yMin/yMax  quote entro cui restano i pezzi
+     o.glow       colore della luce del portale
+     o.pal        { plaster, brickA, brickB, mortar }
+   ============================================================ */
+const RiftDebris = (function () {
+  const COUNT = LOW ? 18 : 36;
+  const REACH = 3.0;                      // quanto si allontanano dal bordo del portale (m)
+
+  function rng(seed) {
+    let s = seed >>> 0;
+    return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296;
+  }
+
+  /* Scheggia: prisma a pianta irregolare, lato ~1 (la scala la dà l'istanza).
+     Davanti (z = +0.5) la faccia d'intonaco, piana; dietro la rottura, più
+     stretta e storta. aFace = 1 sull'intonaco, 0 sulla muratura. */
+  function shardGeo(sides, seed) {
+    const rnd = rng(seed), front = [], back = [];
+    for (let i = 0; i < sides; i++) {
+      const ang = (i + (rnd() - 0.5) * 0.7) / sides * Math.PI * 2, rad = 0.34 + rnd() * 0.16;
+      const x = Math.cos(ang) * rad, y = Math.sin(ang) * rad, k = 0.62 + rnd() * 0.3;
+      front.push([x, y, 0.5]);
+      back.push([x * k, y * k, -0.5 + (rnd() - 0.5) * 0.3]);
+    }
+    const pos = [], face = [];
+    const tri = (a, b, c, f) => { pos.push(...a, ...b, ...c); face.push(f, f, f); };
+    const cf = [0, 0, 0.5], cb = [0, 0, -0.55];
+    for (let i = 0; i < sides; i++) {
+      const j = (i + 1) % sides;
+      tri(cf, front[i], front[j], 1);
+      tri(cb, back[j], back[i], 0);
+      tri(front[i], back[i], back[j], 0);
+      tri(front[i], back[j], front[j], 0);
+    }
+    const g = new T.BufferGeometry();
+    g.setAttribute("position", new T.Float32BufferAttribute(pos, 3));
+    g.setAttribute("aFace", new T.Float32BufferAttribute(face, 1));
+    g.computeVertexNormals();                       // non indicizzata: facce piatte
+    return g;
+  }
+
+  const VERT = `
+    attribute float aFace;
+    varying vec3 vN, vW, vL;
+    varying float vFace;
+    void main() {
+      mat4 m = modelMatrix * instanceMatrix;
+      vec3 s2 = vec3(dot(m[0].xyz, m[0].xyz), dot(m[1].xyz, m[1].xyz), dot(m[2].xyz, m[2].xyz));
+      vN = mat3(m) * (normal / s2);                 // scala diversa per asse: normale corretta
+      vL = position * sqrt(s2);                     // metri, negli assi del pezzo
+      vFace = aFace;
+      vec4 wp = m * vec4(position, 1.0);
+      vW = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `;
+  const FRAG = `
+    uniform vec3 uCenter, uGlow, uPlaster, uBrickA, uBrickB, uMortar;
+    uniform float uLit, uTop;
+    varying vec3 vN, vW, vL;
+    varying float vFace;
+    float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+    float vnoise(vec2 p) {
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+    }
+    void main() {
+      vec3 n = normalize(vN);
+      float g = vnoise(vL.xy * 8.0 + vL.z * 3.7);
+      // muratura: corsi di mattoni come nello spessore del muro sfondato
+      vec2 bq = vec2((vL.x + vL.z * 0.7) / 0.62, vL.y / 0.30);
+      bq.x += 0.5 * mod(floor(bq.y), 2.0);
+      vec2 bf = fract(bq);
+      float dm = min(min(bf.x, 1.0 - bf.x) * 0.62, min(bf.y, 1.0 - bf.y) * 0.30);
+      vec3 body = mix(uBrickA, uBrickB, h21(floor(bq))) * (0.8 + 0.4 * g);
+      body = mix(body, uMortar * (0.85 + 0.3 * g), 1.0 - smoothstep(0.012, 0.03, dm));
+      vec3 base = mix(body, uPlaster * (0.92 + 0.12 * g), vFace);
+      // luce della sala: dall'alto, più chiara verso il centro; cala verso il soffitto come sulle pareti
+      float light = 0.40 + 0.30 * (0.5 + 0.5 * n.y) + 0.24 * max(dot(n, normalize(vec3(-0.75, 0.55, 0.2))), 0.0);
+      light *= 1.0 - 0.22 * clamp(vW.y / uTop, 0.0, 1.0);
+      // luce del portale sulle facce che lo guardano
+      vec3 toC = uCenter - vW;
+      float dist = length(toC);
+      float gl = max(dot(n, toC / dist) * 0.75 + 0.25, 0.0) / (1.0 + 0.03 * dist * dist) * 0.7 * uLit;
+      gl_FragColor = vec4(base * light + uGlow * gl, 1.0);
+      #include <colorspace_fragment>
+    }
+  `;
+
+  function build(parent, o) {
+    const lin = GpuBake.lin, rnd = rng(7741);
+    const U = {
+      uCenter: { value: new T.Vector3(o.x, o.y, o.z) }, uGlow: { value: o.glow },
+      uPlaster: { value: lin(o.pal.plaster) }, uBrickA: { value: lin(o.pal.brickA) },
+      uBrickB: { value: lin(o.pal.brickB) }, uMortar: { value: lin(o.pal.mortar) },
+      uLit: { value: 1 }, uTop: { value: HubGym.DIM.H }
+    };
+    const mat = new T.ShaderMaterial({ uniforms: U, vertexShader: VERT, fragmentShader: FRAG, fog: false, toneMapped: false });
+    const nA = Math.ceil(COUNT / 2);
+    const meshes = [
+      new T.InstancedMesh(shardGeo(5, 11), mat, nA),
+      new T.InstancedMesh(shardGeo(7, 29), mat, COUNT - nA)
+    ];
+    for (const im of meshes) { im.frustumCulled = false; parent.add(im); }
+
+    const pieces = [], e = new T.Euler();
+    for (let i = 0; i < COUNT; i++) {
+      let th = 0, rho = 0, size = 0;
+      for (let tries = 0; tries < 40; tries++) {
+        const u = rnd();                            // 0 = grosso e vicino al bordo, 1 = piccolo e lontano
+        size = (1.25 - 0.9 * u) * (0.75 + 0.5 * rnd());
+        rho = Math.max(o.R + 0.5 + REACH * Math.pow(u, 1.5), o.R + 0.15 + size * 0.5);
+        th = rnd() * Math.PI * 2;
+        const y = o.y + rho * Math.sin(th), pad = size * 0.5 + 0.45;
+        if (y > o.yMin + pad && y < o.yMax - pad) break;
+      }
+      e.set(rnd() * 6.28, rnd() * 6.28, rnd() * 6.28);
+      pieces.push({
+        im: meshes[i < nA ? 0 : 1], k: i < nA ? i : i - nA,
+        th, rho, d: 0.2 + size * 0.55 + rnd() * 1.6,
+        sc: new T.Vector3(size * (0.8 + 0.4 * rnd()), size * (0.8 + 0.4 * rnd()), Math.min(0.32, size * 0.5) * (0.7 + 0.5 * rnd())),
+        q0: new T.Quaternion().setFromEuler(e),
+        ax: new T.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).normalize(),
+        spin: (rnd() < 0.5 ? -1 : 1) * (0.06 + rnd() * 0.2),
+        sw: (0.25 + 0.3 * rnd()) / rho,             // dondolio lungo il cerchio: 25–55 cm
+        f1: 0.18 + rnd() * 0.25, f2: 0.25 + rnd() * 0.3, f3: 0.2 + rnd() * 0.3,
+        p1: rnd() * 6.28, p2: rnd() * 6.28, p3: rnd() * 6.28
+      });
+    }
+
+    const m4 = new T.Matrix4(), q = new T.Quaternion(), v = new T.Vector3();
+    function update(t) {
+      for (const p of pieces) {
+        const th = p.th + p.sw * Math.sin(t * p.f1 + p.p1);
+        const rho = p.rho + 0.12 * Math.sin(t * p.f2 + p.p2);
+        v.set(o.x - p.d - 0.12 * Math.sin(t * p.f3 + p.p3), o.y + rho * Math.sin(th), o.z + rho * Math.cos(th));
+        q.setFromAxisAngle(p.ax, t * p.spin).multiply(p.q0);
+        p.im.setMatrixAt(p.k, m4.compose(v, q, p.sc));
+      }
+      for (const im of meshes) im.instanceMatrix.needsUpdate = true;
+    }
+    update(0);
+    return { update, setLit(k) { U.uLit.value = k; } };
+  }
+
+  return { build };
 })();
 /* ============================================================
    HUB DEI PORTALI — il livello centrale del gioco
