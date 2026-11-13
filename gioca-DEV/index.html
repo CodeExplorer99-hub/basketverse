@@ -1567,7 +1567,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 }
 
 /* MIRINO DELLA MAZZAFIONDA (09d-sling-aim.js): croce bianca classica da FPS,
-   visibile solo con la fionda. Il JS lo trasla sul punto mirato. */
+   visibile solo con la fionda. Il JS lo tiene al centro dello schermo. */
 #sling-crosshair {
   position: absolute; left: 0; top: 0; width: 0; height: 0;
   display: none; pointer-events: none; z-index: 5;
@@ -1583,7 +1583,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwfdwzz2";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwfedy50";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -2531,6 +2531,8 @@ window.stats = function () {
 //
 // Eventi agganciati finora:
 //   - presa della palla (09-input, onDown) → tick breve (TICK_MS)
+//   - palla su ferro/tabellone (10-physics, 08i-triple-hoop, 16-shop-hoops)
+//     → hoopHit(), 80 ms a ogni tocco
 // ═══════════════════════════════════════════════════════════════════════════════
 const Haptics = (() => {
   const STORE_KEY = "bv.haptics";          // "0" = spente (per il futuro interruttore)
@@ -2552,6 +2554,10 @@ const Haptics = (() => {
   // Per alleggerire o rinforzare il tick si ritocca solo questo numero.
   const TICK_MS = 100;                     // tick base dello stile aptico
   const GRAB_MS = TICK_MS;                  // presa della palla
+  const HOOP_HIT_MS = 80;                   // palla che tocca ferro o tabellone (scelto dall'utente)
+  // Pausa minima fra due tocchi: un nuovo impulso prima della fine del precedente
+  // lo sostituirebbe e i colpi ravvicinati si fonderebbero in un ronzio unico.
+  let lastHoopHit = -1e9;
 
   function vibrate(arg) {
     if (!supported || !enabled) return false;
@@ -2584,6 +2590,16 @@ const Haptics = (() => {
     stop() { if (supported) { try { if (native) native.stop(); else navigator.vibrate(0); } catch (_) {} } },
     // ── eventi di gioco ──
     ballGrab() { return vibrate(GRAB_MS); },
+    // Ogni tocco della palla su ferro o tabellone (stesse soglie del suono:
+    // la palla che rotola appoggiata sul ferro non vibra di continuo).
+    hoopHit() {
+      // il pallone del bot avversario (arena 1vs1) gira nella stessa fisica: non è il tuo
+      if (typeof ArenaBot !== "undefined" && ArenaBot.simulating) return false;
+      const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
+      if (now - lastHoopHit < HOOP_HIT_MS) return false;
+      lastHoopHit = now;
+      return vibrate(HOOP_HIT_MS);
+    },
   };
 })();
 /* ============================================================
@@ -16456,7 +16472,9 @@ function updateBallHands() {
   // Potenza di carica corrente (0..1): identica a computeLaunch().power ma senza
   // chiamata. Serve a entrambe le modalità (mani a coppa e mazzafionda).
   const MD = window.innerHeight * 0.30;
-  const cp = dragActive && typeof drag !== 'undefined'
+  // Tiro annullato (potenza riportata a zero, 09-input): mani/fionda a riposo
+  // fino al rilascio, anche se il dito torna a trascinare.
+  const cp = dragActive && typeof drag !== 'undefined' && !drag.cancelled
     ? Math.min(1, Math.hypot(drag.x - drag.startX, drag.y - drag.startY) / MD)
     : 0;
 
@@ -18506,7 +18524,7 @@ const TripleHoop = (function () {
             ball.touchedRim = true;
             sd.kick = Math.min(1, sd.kick + 0.5);
             game.shake = Math.max(game.shake, 0.5);
-            if (imp > 0.35) AudioFX.playRim(Math.min(1, imp / 5));
+            if (imp > 0.35) { AudioFX.playRim(Math.min(1, imp / 5)); Haptics.hoopHit(); }
             if (imp > 2.2) spawnSparks(ball.x, ball.y, ball.z, 8, false);
           }
         }
@@ -18531,6 +18549,7 @@ const TripleHoop = (function () {
           ball.touchedBoard = true;
           game.shake = Math.max(game.shake, 1.0);
           AudioFX.playBoard(Math.min(1, vzIn * REST_BOARD / 4));
+          Haptics.hoopHit();
         }
       }
 
@@ -19417,6 +19436,16 @@ const MAX_DRAG = () => window.innerHeight * 0.30;
    non parte. Sotto questa soglia la barra mostra 0 e la linea di mira sparisce
    (10-physics, updateAimHelpers), così "zero" a schermo = annullato. */
 const SHOT_CANCEL_POWER = 0.10;
+/* Annullamento DEFINITIVO per quel tocco: se la potenza è salita oltre la soglia
+   e poi è tornata a zero, il tiro resta annullato anche trascinando di nuovo.
+   Per tirare bisogna lasciare e ripremere sulla palla (evita il tiro che riparte
+   quando il giocatore crede di aver annullato). Ritorna true se annullato. */
+function trackShotCancel(power) {
+  if (drag.cancelled) return true;
+  if (power > SHOT_CANCEL_POWER) drag.wasCharged = true;
+  else if (drag.wasCharged) drag.cancelled = true;
+  return drag.cancelled;
+}
 // Sensibilità del movimento del TIRO (mira + potenza). <1 = meno sensibile:
 // serve trascinare di più per lo stesso effetto -> più controllo fine. Applicata
 // solo in computeLaunch (allarga il denominatore MD); NON tocca la camera.
@@ -19553,7 +19582,7 @@ function onDown(e) {
     drag.moveStartT = 0;   // il timer parte solo con una frustata veloce, non ora
     drag.grabT = performance.now();   // avvia il lockout iniziale (vedi flickAmount)
     drag.samples = [{ t: drag.grabT, x: p.x, y: p.y }];   // reset dello storico velocità
-    if (game.slingshotOn) SlingAim.lockForShot();   // da qui la direzione non cambia più (09d)
+    drag.wasCharged = drag.cancelled = false;        // nuova presa: si può tirare
     Haptics.ballGrab();   // tick aptico minimo alla presa (01c)
     e.preventDefault();
   }
@@ -19616,6 +19645,9 @@ function onMove(e) {
   }
   if (peak >= FLICK_SPEED_ARM()) drag.moveStartT = now;
   drag.x = p.x; drag.y = p.y;
+  // Controllo a ogni movimento (non solo a ogni frame): anche un passaggio
+  // veloce per lo zero annulla il tiro.
+  if (ball.state === "ready") trackShotCancel(computeLaunch(0).power);
   // In tiro la camera è statica (sul PC): si tira dritto dove guarda già.
   e.preventDefault();
 }
@@ -19698,8 +19730,8 @@ function onUp(e) {
   powerWrap.style.opacity = 0;
   aimDots.visible = false;
   const l = computeLaunch();
-  SlingAim.afterShot();   // mira presa in automatico dal centro: si libera (09d)
-  if (l.power > SHOT_CANCEL_POWER) {   // potenza riportata a zero = tiro ANNULLATO
+  // Potenza riportata a zero = tiro ANNULLATO, e resta tale fino a una nuova presa.
+  if (!trackShotCancel(l.power) && l.power > SHOT_CANCEL_POWER) {
     // la traiettoria parte dal punto della palla afferrato dal cursore
     ball.x += l.ox; ball.y += l.oy; ball.z += l.oz;
     ball.vx = l.vx; ball.vy = l.vy; ball.vz = l.vz;
@@ -19804,8 +19836,8 @@ function computeLaunch(flickOverride) {
     ? level.current.launchScale : 1;
 
   // ---- MAZZAFIONDA ACCESA: tiro DRITTO (niente gravità/arco) ----
-  // La DIREZIONE è già decisa dal mirino (tocco sullo schermo, 09d-sling-aim) e
-  // non cambia mentre carichi: il trascinamento della palla dà SOLO la potenza.
+  // La DIREZIONE è quella del mirino, fisso al centro della visuale (09d-sling-aim):
+  // si tira dove si guarda, il trascinamento della palla dà SOLO la potenza.
   // `straight` dice alla linea di mira di disegnarsi retta.
   if (game.slingshotOn) {
     const sd = SlingAim.shotDir(ball.x + off.x, ball.y + off.y, ball.z + off.z);
@@ -20041,12 +20073,6 @@ function mobileLookStop() {
 function mobileLookEnd(e) {
   if (e.changedTouches && !_mobileLookTouch(e.changedTouches)) return;   // si è alzato un altro dito
   mobileLookStop();
-  // MAZZAFIONDA: con la palla pronta un tocco secco fuori dalla palla fissa la
-  // direzione del tiro (mirino sul punto toccato, 09d-sling-aim).
-  if (game.slingshotOn && !mobileLook.tap && mobileLook.moved < MOBILE_TAP_PX &&
-      e.type !== "touchcancel" && ball.state === "ready") {
-    SlingAim.setFromScreen(drag.startX, drag.startY);
-  }
   // Palla in volo o a terra: un tocco senza trascinare resta "prossimo tiro".
   if (mobileLook.tap && mobileLook.moved < MOBILE_TAP_PX && e.type !== "touchcancel" &&
       (ball.state === "done" || ball.state === "flying")) {
@@ -20360,24 +20386,19 @@ const FloorMove = (function () {
   return { tryDown, noteUp, update, walking: () => walk.on };
 })();
 /* ============================================================
-   MIRA DELLA MAZZAFIONDA — direzione decisa PRIMA, poi solo carica.
-   - Un TOCCO (o clic) sullo schermo fuori dalla palla fissa la direzione:
-     il mirino si sposta lì e resta agganciato a quel punto del mondo.
-   - Trascinando la palla si carica SOLO la potenza: la direzione non cambia
-     più finché la palla non parte.
-   - Senza tocco il mirino sta al centro dello schermo; alla presa della palla
-     la direzione si blocca sul centro di quel momento.
-   - Mirino a croce bianco, classico da FPS, visibile SOLO con la fionda.
-   Il punto mirato sta lungo il raggio del tocco a distanza canestro (3..25 m):
+   MIRA DELLA MAZZAFIONDA — il mirino segue SEMPRE e SOLO la visuale.
+   - Mirino a croce bianco, classico da FPS, fisso al centro dello schermo:
+     non si aggancia mai a un punto del mondo. Giri lo sguardo, lui viene con te.
+   - Il tiro parte dove guardi: trascinando la palla si carica SOLO la potenza.
+   - Visibile SOLO con la fionda.
+   Il punto mirato sta lungo l'asse della visuale a distanza canestro (3..25 m):
    la palla parte da sotto la camera e converge proprio lì.
    ============================================================ */
 const SlingAim = (() => {
-  const tgt = new T.Vector3();      // punto mirato (spazio three)
-  const _v = new T.Vector3();
+  const _tgt = new T.Vector3();     // punto mirato del frame (spazio three)
+  const _dir = new T.Vector3();
   const _c = new T.Vector3();
-  let locked = false;               // true = direzione fissata (tocco o presa)
-  let auto = false;                 // bloccata da sola alla presa: si libera dopo il tiro
-  let lastLevel = null;
+  let shownW = -1, shownH = -1;     // ultima misura dello schermo applicata al mirino
 
   // Mirino: quattro trattini bianchi attorno a un centro vuoto + puntino.
   const el = document.createElement("div");
@@ -20385,43 +20406,21 @@ const SlingAim = (() => {
   el.innerHTML = "<i></i><i></i><i></i><i></i><b></b>";
   (document.getElementById("hud") || document.body).appendChild(el);
 
-  function camPos(out) { camera.updateMatrixWorld(); return out.setFromMatrixPosition(camera.matrixWorld); }
-
-  // Distanza del punto mirato: quella del canestro, entro limiti ragionevoli.
-  function aimDist(cp) {
+  // Punto al centro della visuale, alla distanza del canestro (entro limiti ragionevoli).
+  function viewPoint(out) {
+    camera.updateMatrixWorld();
+    const cp = _c.setFromMatrixPosition(camera.matrixWorld);
+    camera.getWorldDirection(_dir);
     const d = Math.hypot(hoop.x - cp.x, hoop.y - cp.y, -hoop.z - cp.z);
-    return isFinite(d) ? Math.max(3, Math.min(25, d)) : 12;
+    return out.copy(cp).addScaledVector(_dir, isFinite(d) ? Math.max(3, Math.min(25, d)) : 12);
   }
-
-  function pointFromScreen(x, y, out) {
-    const cp = camPos(_c);
-    _v.set((x / window.innerWidth) * 2 - 1, -(y / window.innerHeight) * 2 + 1, 0.5)
-      .unproject(camera).sub(cp).normalize();
-    return out.copy(cp).addScaledVector(_v, aimDist(cp));
-  }
-
-  // Tocco sullo schermo: fissa la nuova direzione.
-  function setFromScreen(x, y) {
-    pointFromScreen(x, y, tgt);
-    locked = true; auto = false;
-  }
-
-  // Presa della palla senza un tocco prima: blocca il centro dello schermo.
-  function lockForShot() {
-    if (locked) return;
-    pointFromScreen(window.innerWidth / 2, window.innerHeight / 2, tgt);
-    locked = true; auto = true;
-  }
-
-  function afterShot() { if (auto) locked = false; }
-  function reset() { locked = false; auto = false; }
 
   /* Direzione dal punto di partenza della palla (coordinate FISICA, z invertita)
-     al punto mirato. yaw/el nella convenzione di computeLaunch:
+     al punto al centro della visuale. yaw/el nella convenzione di computeLaunch:
      vx = -hor·sin(yaw), vz = hor·cos(yaw); az = parte di yaw oltre visuale+negozio. */
   function shotDir(bx, by, bz) {
-    if (!locked) pointFromScreen(window.innerWidth / 2, window.innerHeight / 2, tgt);
-    const dx = tgt.x - bx, dy = tgt.y - by, dz = -tgt.z - bz;
+    viewPoint(_tgt);
+    const dx = _tgt.x - bx, dy = _tgt.y - by, dz = -_tgt.z - bz;
     const len = Math.hypot(dx, dy, dz) || 1;
     const el = Math.asin(Math.max(-1, Math.min(1, dy / len)));
     const yaw = Math.atan2(-dx, dz);
@@ -20431,26 +20430,18 @@ const SlingAim = (() => {
   }
 
   function update() {
-    if (lastLevel !== level.current) { lastLevel = level.current; reset(); }
-    if (!game.slingshotOn && locked) reset();
     const show = game.slingshotOn && !game.menuOpen && !game.gameOver && !game.buyOpen &&
                  !game.invOpen && !level.transitioning;
-    let x = window.innerWidth / 2, y = window.innerHeight / 2;
-    if (show && locked) {
-      _v.copy(tgt).project(camera);
-      if (_v.z > 1 || _v.z < -1) {
-        // Punto finito alle spalle (visuale girata): torna al centro.
-        if (ball.state === "ready" && !drag.active) reset();
-      } else {
-        x = (_v.x * 0.5 + 0.5) * window.innerWidth;
-        y = (-_v.y * 0.5 + 0.5) * window.innerHeight;
-      }
-    }
     el.style.display = show ? "block" : "none";
-    if (show) el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+    if (!show) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    if (W !== shownW || H !== shownH) {
+      shownW = W; shownH = H;
+      el.style.transform = `translate(${(W / 2).toFixed(1)}px, ${(H / 2).toFixed(1)}px)`;
+    }
   }
 
-  return { setFromScreen, lockForShot, afterShot, reset, shotDir, update };
+  return { shotDir, update };
 })();
 /* ============================================================
    FISICA — un passo di integrazione (dt <= SUBSTEP)
@@ -20702,7 +20693,7 @@ function stepPhysics(dt) {
         game.shake = Math.max(game.shake, 0.5);
         // il ferro si flette verso il basso e risale a molla
         game.rimFlexV -= Math.min(1.1, imp * 0.22);
-        if (imp > 0.35) AudioFX.playRim(Math.min(1, imp / 5));
+        if (imp > 0.35) { AudioFX.playRim(Math.min(1, imp / 5)); Haptics.hoopHit(); }
         if (imp > 2.2) spawnSparks(ball.x, ball.y, ball.z, 8, false);
       }
     }
@@ -20735,6 +20726,7 @@ function stepPhysics(dt) {
       game.shake = Math.max(game.shake, 1.0);
       game.boardShake = Math.max(game.boardShake, Math.min(1.4, vzIn / 2.8));
       AudioFX.playBoard(Math.min(1, vzIn * REST_BOARD / 4));
+      Haptics.hoopHit();
     }
   }
 
@@ -21115,9 +21107,11 @@ function updateAimHelpers(t) {
     // della trazione e NON si sposta quando il timer della campana si arma o si
     // disarma. La campana resta nel tiro vero (onUp) e la segnala l'aura sotto.
     const l = computeLaunch(0);
-    if (l.power > 0 && l.power <= SHOT_CANCEL_POWER) {
+    const cancelled = trackShotCancel(l.power);
+    if (cancelled || (l.power > 0 && l.power <= SHOT_CANCEL_POWER)) {
       // ZONA DI ANNULLAMENTO (09-input): potenza tornata a zero → barra a 0 e
-      // niente linea di mira; rilasciando qui il tiro non parte.
+      // niente linea di mira; rilasciando qui il tiro non parte. Una volta
+      // annullato resta così per tutto il tocco, anche trascinando di nuovo.
       powerWrap.style.opacity = 1;
       powerFill.style.height = "0%";
       powerWrap.style.setProperty("--p", "0");
@@ -27331,6 +27325,10 @@ const boatLevel = (function () {
   let skyEnv = null;         // riflessi del cielo (PMREM) per mare, balena e legno
   const SKY = new T.Color(0x9ccbe8);
   const FOG = new T.FogExp2(0xdbe7e6, 0.015);
+  // riflessi globali (quelli con cui il livello gira davvero: l'hub mette i suoi
+  // solo mentre ci sei dentro). Servono alla veduta del portale, vedi 15f.
+  const BASE_ENV = scene.environment;
+  let everEntered = false;   // false finché il mondo è stato costruito solo per la veduta
 
   // --- balena ---
   const whaleGroup = new T.Group();
@@ -31218,6 +31216,10 @@ const boatLevel = (function () {
   /* ---------- ingresso / uscita ---------- */
   function enter() {
     if (!built) build();
+    // costruito in anticipo per la veduta del portale dell'hub (15f): il mondo era
+    // rimasto fuori dalla scena, così l'hub non lo scambia per roba sua
+    if (!world.parent) scene.add(world, sun, sun.target, hemi);
+    everEntered = true;
     world.visible = true;
     sun.visible = true;
     hemi.visible = true;
@@ -35270,7 +35272,120 @@ const boatLevel = (function () {
     updateBoatDamage(dt);
   }
 
+  /* =========================================================
+     VEDUTA PER IL PORTALE DELL'HUB (21-hub-9-rift-wall)
+     ---------------------------------------------------------
+     Dentro il portale del mare non c'è un disegno: c'è una FOTOGRAFIA del
+     livello vero (cielo, mare, balena col canestro e il granchio, la prua
+     della barca), scattata dal punto in cui sta il giocatore. Si scatta una
+     volta sola: il mondo si costruisce in anticipo, si disegna in una
+     texture e si libera subito dalla GPU (torna su da solo quando ci entri).
+     La texture non appartiene a nessun livello: resta finché dura il gioco e
+     si rifà solo se il contesto grafico si perde.
+
+     boatLevel.portalView(lato)     → texture quadrata (la crea e la scatta)
+     boatLevel.refreshPortalView()  → la rifà se era rimasta indietro
+     ========================================================= */
+  const VIEW = {
+    eye: [0, 1.70, 0],            // occhi del giocatore sulla barca
+    look: [-0.3, 2.65, -9.0],     // un po' sopra il dorso: canestro in alto, prua in basso
+    fov: 58,                      // balena intera dentro il cerchio, con un filo di margine
+    whale: [0.9, -9.0]            // balena di profilo, a metà del suo percorso (x, z three)
+  };
+  let viewRT = null, viewStale = false;
+
+  function shootPortalView() {
+    // contesto ripreso mentre si gioca nel mare: si rifà al ritorno nell'hub
+    if (level.current === boatLevel) { viewStale = true; return; }
+    viewStale = false;
+
+    // il mondo si costruisce (o si riprende) A NOME DEL MARE: le sue texture
+    // generate devono restare sue, non di chi sta chiedendo la veduta (GpuLife)
+    const cur = level.current, act = level.active, goal = level.goalMakes;
+    level.current = boatLevel; level.active = true; level.goalMakes = 5;
+    try {
+      if (!built) build();
+      GpuLife.restore(boatLevel);
+      drawBanner(0);
+    } finally {
+      level.current = cur; level.active = act; level.goalMakes = goal;
+    }
+
+    // posa: balena ferma di profilo, canestro sul dorso come in enter()
+    whaleGroup.position.set(VIEW.whale[0], 0, VIEW.whale[1]);
+    whaleGroup.rotation.set(0, Math.PI / 2, 0);
+    const hp = { parent: hoopGroup.parent, pos: hoopGroup.position.clone(),
+      rot: hoopGroup.rotation.clone(), vis: hoopGroup.visible };
+    hoopMount.add(hoopGroup);
+    hoopGroup.position.set(HOOP_POLE_Z, 0, 0);
+    hoopGroup.rotation.set(0, -Math.PI / 2, 0);
+    hoopGroup.visible = true;
+
+    // scena a parte: solo il mare, con le sue luci, il suo cielo e la sua nebbia
+    const shot = new T.Scene();
+    shot.background = SKY; shot.fog = FOG; shot.environment = BASE_ENV;
+    const parts = [world, sun, sun.target, hemi];
+    const was = parts.map((o) => o.visible);
+    for (const o of parts) shot.add(o);
+    world.visible = sun.visible = hemi.visible = true;
+    const cam = new T.PerspectiveCamera(VIEW.fov, 1, 0.05, 90);
+    cam.position.fromArray(VIEW.eye);
+    cam.lookAt(VIEW.look[0], VIEW.look[1], VIEW.look[2]);
+
+    // disegnata al doppio e ridotta: bordi puliti senza chiedere il multisample
+    const S2 = viewRT.width * 2;
+    const big = new T.WebGLRenderTarget(S2, S2, {
+      depthBuffer: true, stencilBuffer: false, generateMipmaps: false,
+      minFilter: T.LinearFilter, magFilter: T.LinearFilter
+    });
+    big.texture.colorSpace = viewRT.texture.colorSpace;
+    const prev = renderer.getRenderTarget();
+    try {
+      renderer.setRenderTarget(big);
+      renderer.clear();
+      renderer.render(shot, cam);
+      renderer.setRenderTarget(prev);
+      GpuLife.copyTarget(big, viewRT);
+    } finally {
+      renderer.setRenderTarget(prev);
+      big.dispose();
+      // tutto al suo posto: il canestro dov'era, il mondo nascosto (in scena solo
+      // se il livello è già stato giocato: altrimenti ce lo mette enter())
+      if (hp.parent) hp.parent.add(hoopGroup); else hoopMount.remove(hoopGroup);
+      hoopGroup.position.copy(hp.pos);
+      hoopGroup.rotation.copy(hp.rot);
+      hoopGroup.visible = hp.vis;
+      parts.forEach((o, i) => {
+        if (everEntered) scene.add(o); else shot.remove(o);
+        o.visible = was[i];
+      });
+      // e la memoria video del mare si libera, come all'uscita dal livello
+      GpuLife.releaseObjects([world, sun, hemi], HOME_KEEP, null);
+      GpuLife.release(boatLevel);
+    }
+  }
+
+  function portalView(size) {
+    if (!viewRT) {
+      viewRT = new T.WebGLRenderTarget(size, size, {
+        depthBuffer: false, stencilBuffer: false, generateMipmaps: true,
+        minFilter: T.LinearMipmapLinearFilter, magFilter: T.LinearFilter
+      });
+      const tx = viewRT.texture;
+      tx.colorSpace = renderer.capabilities.isWebGL2 ? T.SRGBColorSpace : T.NoColorSpace;
+      tx.wrapS = tx.wrapT = T.ClampToEdgeWrapping;
+      tx.anisotropy = GpuBake.MAX_ANISO;
+      try { shootPortalView(); } catch (e) { console.error("Veduta del mare:", e); }
+      GpuLife.track(viewRT, shootPortalView, null);
+    }
+    return viewRT.texture;
+  }
+  function refreshPortalView() {
+    if (viewRT && viewStale) shootPortalView();
+  }
+
   return { id: "whale", enter, exit, update, onShot, onBasket, groundAt, onWater, collideBall, onComplete,
+    portalView, refreshPortalView,
     // potenziamenti volanti (10b): restano anche nella boss fight del Kraken;
     // si ritirano solo a Kraken morto (esplosione + premio del Tridente)
     powerupsBlocked: () => finale.active && finale.krakenHP <= 0,
@@ -38414,7 +38529,7 @@ function buildShopkeeper(opts) {
           game.netKick = Math.min(1, game.netKick + 0.5);
           game.shake = Math.max(game.shake, 0.5);
           game.rimFlexV -= Math.min(1.1, imp * 0.22);
-          if (imp > 0.35) AudioFX.playRim(Math.min(1, imp / 5));
+          if (imp > 0.35) { AudioFX.playRim(Math.min(1, imp / 5)); Haptics.hoopHit(); }
           if (imp > 2.2) spawnSparks(ball.x, ball.y, ball.z, 8, false);
         }
       }
@@ -38441,6 +38556,7 @@ function buildShopkeeper(opts) {
         game.shake = Math.max(game.shake, 1.0);
         game.boardShake = Math.max(game.boardShake, Math.min(1.4, vzIn / 2.8));
         AudioFX.playBoard(Math.min(1, vzIn * REST_BOARD / 4));
+        Haptics.hoopHit();
       }
     }
 
@@ -38821,7 +38937,7 @@ function buildShopkeeper(opts) {
           ball.touchedRim = true;
           game.netKick = Math.min(1, game.netKick + 0.5);
           game.shake = Math.max(game.shake, 0.5);
-          if (imp > 0.35) AudioFX.playRim(Math.min(1, imp / 5));
+          if (imp > 0.35) { AudioFX.playRim(Math.min(1, imp / 5)); Haptics.hoopHit(); }
           if (imp > 2.2) spawnSparks(ball.x, ball.y, ball.z, 8, false);
         } else {
           rhStore();
@@ -38849,6 +38965,7 @@ function buildShopkeeper(opts) {
         game.shake = Math.max(game.shake, 1.0);
         game.boardShake = Math.max(game.boardShake, Math.min(1.4, vzIn / 2.8));
         AudioFX.playBoard(Math.min(1, vzIn * REST_BOARD / 4));
+        Haptics.hoopHit();
         rhLoad();
       }
     }
@@ -56577,19 +56694,21 @@ function collideSticks() {
      - metà verso le spalle     → SPAZIO (space)
 
    MARE — portale CIRCOLARE (forma nuova, la prenderanno tutti):
-     un cerchio alto quasi quanto la parete, chiuso da un anello di
-     energia dai contorni netti (filo bianco al centro, fascia colorata,
-     due bordi scuri). Dentro, la veduta del livello attraverso uno
-     specchio d'acqua, solo un po' sfocata e mossa. Attorno all'anello il
-     muro è SFONDATO: bordo a schegge, muratura in vista nello spessore,
-     crepe che corrono nell'intonaco, e i pezzi staccati che fluttuano
-     davanti alla parete (RiftDebris, 21-hub-9b).
+     un cerchio alto quasi quanto la parete. Il contorno è ETEREO: una
+     fascia di energia che non segue un cerchio perfetto ma "respira"
+     (il raggio ondeggia piano), senza bordi netti: sfuma in veli di luce
+     verso l'acqua e verso la muratura, con un filo bianco che serpeggia
+     al centro. Dentro, la veduta del livello attraverso uno specchio
+     d'acqua: è una FOTOGRAFIA del mare vero (boatLevel.portalView, 15f),
+     nitida, appena mossa dalle onde. Attorno il muro è SFONDATO: bordo a
+     schegge, muratura in vista nello spessore, crepe che corrono
+     nell'intonaco, e i pezzi staccati che fluttuano davanti alla parete
+     (RiftDebris, 21-hub-9b).
 
    SPAZIO — ancora il riquadro di prima: visione molto sfocata nello
      specchio d'acqua, contorno etereo con leggere scariche.
 
-   Le "vedute" dei livelli sono dipinte UNA volta sulla GPU (GpuBake):
-   cielo, mare, balena col canestro e parapetto della barca; spazio,
+   La veduta dello spazio è ancora dipinta UNA volta sulla GPU (GpuBake):
    Via Lattea, pianeti con gli anelli e il pianeta-canestro.
 
    Si entra tirando la palla nell'acqua (21-level-hub: collideHall).
@@ -56608,12 +56727,18 @@ const HubRift = (function () {
   const HH = D.H - 0.6;                   // fino al cornicione
   const X = D.HX - 0.06;                  // appena davanti alla parete
   const OPEN_S = 2.4;                     // durata dell'apertura entrando nell'hub
-  const TEX = LOW ? 256 : 512;
+  const TEX = LOW ? 256 : 512;            // veduta dipinta (spazio)
+  const TEX_SEA = LOW ? 512 : 1024;       // fotografia del mare (lato, px)
 
   /* MARE: cerchio. a = posizione lungo il muro (0 = lato gradinata), y = quota del centro,
-     R = raggio fuori dall'anello, RING = spessore dell'anello, B0..B1 = quanto il muro è
-     sfondato oltre l'anello (min..max), EXT = fin dove arrivano crepe e alone. */
-  const SEA = { a: HALF / 2, y: 6.5, R: 5.6, RING: 0.42, B0: 0.30, B1: 0.95, EXT: 3.8 };
+     R = raggio fuori dalla fascia, RING = spessore della fascia, B0..B1 = quanto il muro è
+     sfondato oltre la fascia (min..max), EXT = fin dove arrivano crepe e alone.
+     Contorno etereo: WOB = quanto ondeggia il raggio (m, ai picchi circa un terzo),
+     PAD = margine oltre R lasciato ai veli di luce.
+     Veduta: REFR = quanto le onde spostano l'immagine (0 = ferma), VIEW = di quanto la
+     fotografia sborda oltre l'acqua (m), così sotto la fascia non finisce mai. */
+  const SEA = { a: HALF / 2, y: 6.5, R: 5.6, RING: 0.42, B0: 0.30, B1: 0.95, EXT: 3.8,
+    WOB: 1.3, PAD: 0.9, REFR: 0.45, VIEW: 0.6 };
   const SEA_RI = SEA.R - SEA.RING;        // raggio dell'acqua
   /* SPAZIO: riquadro nella sua metà. Margine laterale, basso, alto (m). */
   const M = 1.1, BOT = 0.55, TOP = HH - 0.8;
@@ -56631,77 +56756,9 @@ const HubRift = (function () {
   let openT = OPEN_S, lastT = 0, lastDrop = -9;
 
   /* =========================================================
-     VEDUTE DEI LIVELLI (cotte una volta)
+     VEDUTA DELLO SPAZIO (cotta una volta)
+     Quella del mare è una fotografia del livello vero: boatLevel.portalView (15f).
      ========================================================= */
-  // mare: quadrata, composta per stare in un cerchio (sole a sinistra, balena al centro-destra)
-  const FRAG_SEA = `
-    uniform vec3 cZen, cUp, cMid, cLow, cHaze, cSea, cSeaFar, cSun, cWhale, cWood;
-    void main() {
-      vec2 uv = vUv;
-      float x = uv.x - 0.5;
-      const float HOR = 0.46, SUNX = 0.27, WW = 0.30;
-      vec3 col;
-      if (uv.y >= HOR) {
-        float t = pow((uv.y - HOR) / (1.0 - HOR), 0.7);
-        col = mix(cHaze, cLow, smoothstep(0.0, 0.12, t));
-        col = mix(col, cMid, smoothstep(0.10, 0.40, t));
-        col = mix(col, cUp, smoothstep(0.35, 0.70, t));
-        col = mix(col, cZen, smoothstep(0.65, 1.0, t));
-        float n = fbm(vec3(x * 2.2, t * 6.0, 2.7), 5);
-        float cl = smoothstep(0.05, 0.5, n) * sfall(0.55, 0.08, t) * smoothstep(0.0, 0.05, t);
-        col = mix(col, mix(vec3(0.93, 0.94, 0.96), cHaze, 0.3), cl * 0.8);
-      } else {
-        float d = (HOR - uv.y) / HOR;           // 0 all'orizzonte, 1 in basso
-        col = mix(cHaze * 0.85, cSeaFar, smoothstep(0.0, 0.06, d));
-        col = mix(col, cSea, smoothstep(0.05, 0.7, d));
-        float z = 1.0 / (d + 0.05);
-        float w = fbm(vec3(x * z * 0.9, z * 1.8, 5.1), 4);
-        col *= 0.85 + 0.3 * w;
-        col = mix(col, vec3(0.9, 0.95, 1.0), smoothstep(0.45, 0.75, w) * 0.25 * (1.0 - d));
-        float gx = uv.x - SUNX;                 // scia del sole sull'acqua
-        float gl = exp(-gx * gx / (0.003 + 0.05 * d * d)) * smoothstep(0.1, 0.6, w * 0.5 + 0.5);
-        col += cSun * gl * 0.8 * (1.0 - d * 0.7);
-      }
-      // sole basso a sinistra
-      float ds = length(vec2(uv.x - SUNX, uv.y - (HOR + 0.11)));
-      col += cSun * (sfall(0.04, 0.03, ds) * 2.0 + exp(-ds * 9.0) * 0.45);
-
-      // balena: il dorso che affiora, col canestro appoggiato sopra
-      vec2 q = vec2(uv.x - 0.56, uv.y - (HOR - 0.10));
-      float hump = 0.075 * sqrt(max(0.0, 1.0 - pow(q.x / WW, 2.0)));
-      float wl = -0.012 + 0.004 * sin(q.x * 44.0);
-      float body = smoothstep(0.0, 0.006, hump - q.y) * smoothstep(wl - 0.004, wl + 0.004, q.y) * step(abs(q.x), WW);
-      vec3 skin = cWhale * (0.55 + 0.9 * clamp(q.y / 0.08, 0.0, 1.0)) * (0.85 + 0.3 * fbm(vec3(q * 30.0, 8.0), 3));
-      col = mix(col, skin, body);
-      float foam = exp(-pow((q.y - wl) / 0.006, 2.0)) * step(abs(q.x), WW);
-      col = mix(col, vec3(0.92, 0.96, 1.0), foam * 0.6);
-      // soffio
-      float sy = q.y - 0.06;
-      float sp = exp(-pow((q.x + 0.20) / (0.015 + max(sy, 0.0) * 0.45), 2.0)) * smoothstep(0.0, 0.04, sy) * sfall(0.26, 0.09, sy);
-      col = mix(col, vec3(0.95, 0.97, 1.0), sp * (0.45 + 0.4 * fbm(vec3(q * 25.0, 1.0), 3)));
-      // canestro: palo, tabellone bianco, ferro arancio
-      float h0 = 0.073, hx = q.x - 0.04;
-      float pole = step(abs(hx), 0.0045) * step(h0 - 0.01, q.y) * step(q.y, h0 + 0.13);
-      vec2 bb = vec2(hx, q.y - (h0 + 0.15));
-      float board = step(abs(bb.x), 0.046) * step(abs(bb.y), 0.032);
-      float rim = step(abs(hx + 0.03), 0.024) * step(abs(q.y - (h0 + 0.128)), 0.004);
-      col = mix(col, vec3(0.30, 0.31, 0.33), pole);
-      col = mix(col, vec3(0.95), board);
-      col = mix(col, vec3(1.0, 0.35, 0.06), rim);
-
-      // parapetto della barca in primo piano
-      float rx = x / 0.5;
-      float rail = 0.13 + 0.05 * (1.0 - rx * rx);
-      if (uv.y < rail) {
-        float pl = fbm(vec3(x * 3.0, uv.y * 40.0, 1.0), 3);
-        vec3 wood = cWood * (0.7 + 0.3 * pl) * (0.55 + 0.45 * uv.y / rail);
-        wood = mix(wood, cWood * 1.5, exp(-pow((rail - uv.y) / 0.006, 2.0)));
-        col = mix(col, wood, smoothstep(rail, rail - 0.004, uv.y));
-      }
-      gl_FragColor = vec4(col, 1.0);
-    }
-  `;
-
   const FRAG_SPACE = `
     uniform vec3 cJ1, cJ2, cJs, cI1, cI2, cR1, cR2, cK1, cK2, cAtJ, cAtI, cAtK, cB1, cB2;
     const vec3 LDIR = vec3(-0.62, 0.66, 0.42);
@@ -56793,15 +56850,8 @@ const HubRift = (function () {
     }
   `;
 
-  function bakeViews() {
-    const sea = bake(FRAG_SEA, {
-      cZen: { value: lin("#1e5fa8") }, cUp: { value: lin("#3f86c6") },
-      cMid: { value: lin("#79b4de") }, cLow: { value: lin("#bcd9ec") },
-      cHaze: { value: lin("#dbe7e6") }, cSea: { value: lin("#0a3f60") },
-      cSeaFar: { value: lin("#2f6f8f") }, cSun: { value: lin("#fff1d6") },
-      cWhale: { value: lin("#56606c") }, cWood: { value: lin("#7a5232") }
-    }, TEX, TEX, true, 1);
-    const space = bake(FRAG_SPACE, {
+  function bakeSpaceView() {
+    return bake(FRAG_SPACE, {
       cJ1: { value: lin("#c9a26a") }, cJ2: { value: lin("#e6cfa0") }, cJs: { value: lin("#c34a33") },
       cI1: { value: lin("#8fb6d6") }, cI2: { value: lin("#c4dcec") },
       cR1: { value: lin("#b05a3a") }, cR2: { value: lin("#d68a5e") },
@@ -56809,7 +56859,6 @@ const HubRift = (function () {
       cAtJ: { value: lin("#ffcf96") }, cAtI: { value: lin("#9fd4ff") }, cAtK: { value: lin("#a996ff") },
       cB1: { value: lin("#7f6bff") }, cB2: { value: lin("#ffd2b0") }
     }, TEX, TEX / 2, true, 1);
-    return { sea, space };
   }
 
   /* =========================================================
@@ -56841,7 +56890,7 @@ const HubRift = (function () {
   const f2 = (v) => v.toFixed(3);
 
   /* =========================================================
-     MARE — IL DISCO: acqua + anello dai contorni netti
+     MARE — IL DISCO: la veduta nello specchio d'acqua + il contorno etereo
      ========================================================= */
   const VERT_DISC = `
     varying vec2 vP;
@@ -56856,9 +56905,10 @@ const HubRift = (function () {
     uniform vec4 uDrop;
     uniform vec3 uC1, uC2;
     varying vec2 vP;
-    const float R = ${f2(SEA.R)}, RI = ${f2(SEA_RI)}, PI2 = 6.2831853;
+    const float RI = ${f2(SEA_RI)}, RC = ${f2(SEA.R - SEA.RING / 2)}, HW = ${f2(SEA.RING / 2)};
+    const float RG = ${f2(SEA.R + SEA.PAD)}, RV = ${f2(SEA_RI + SEA.VIEW)};
+    const float WOB = ${f2(SEA.WOB)}, REFR = ${f2(SEA.REFR)}, PI2 = 6.2831853;
     ${NOISE}
-    ${LOOK}
     void main() {
       vec2 p = vP;
       float r = length(p), t = uT, lit = uLit;
@@ -56866,7 +56916,7 @@ const HubRift = (function () {
 
       // apertura: l'acqua si allarga dal centro
       float fl = fbm3(p * 0.55 + vec2(0.0, -t * 0.7));
-      float om = smoothstep(0.0, 0.12, uOpen * 1.3 - r / RI + (fl - 0.5) * 0.25);
+      float om = smoothstep(0.0, 0.12, uOpen * 1.5 - r / RI + (fl - 0.5) * 0.25);
 
       // ---- superficie dell'acqua: spostamento ----
       vec2 w = vec2(sin(p.y * 0.8 + t * 1.2 + 1.5 * sin(p.x * 0.31 + t * 0.4)),
@@ -56879,50 +56929,68 @@ const HubRift = (function () {
         float id = floor(k), ph = fract(k);
         float ca = h21(vec2(id, fi)) * PI2, cr = sqrt(h21(vec2(fi, id + 3.1))) * RI * 0.8;
         vec2 v = p - cr * vec2(cos(ca), sin(ca));
-        float d = length(v) + 1e-3, rad = ph * 6.0;
-        w += v / d * sin((d - rad) * 3.2) * exp(-abs(d - rad) * 0.9) * (1.0 - ph) * 0.16;
+        float dv = length(v) + 1e-3, rad = ph * 6.0;
+        w += v / dv * sin((dv - rad) * 3.2) * exp(-abs(dv - rad) * 0.9) * (1.0 - ph) * 0.16;
       }
       // la palla che tocca l'acqua
       float di = t - uDrop.z;
       if (di > 0.0 && di < 3.5) {
         vec2 v = p - uDrop.xy;
-        float d = length(v) + 1e-3, rad = di * 5.0;
-        w += v / d * sin((d - rad) * 3.0) * exp(-abs(d - rad) * 0.7) * exp(-di * 1.1) * uDrop.w * 0.5;
+        float dv = length(v) + 1e-3, rad = di * 5.0;
+        w += v / dv * sin((dv - rad) * 3.0) * exp(-abs(dv - rad) * 0.7) * exp(-di * 1.1) * uDrop.w * 0.5;
       }
       w *= mix(0.1, 1.0, lit) * om;                 // spento: acqua quasi ferma
 
-      // ---- la veduta attraverso l'acqua (solo un po' mossa) ----
-      vec3 img = look(tView, 0.5 + (p + w * 0.8) / (2.0 * RI));
+      // ---- la veduta: il livello vero, nitido, appena mosso dalle onde ----
+      vec3 img = texture2D(tView, 0.5 + (p + w * REFR) / (2.0 * RV)).rgb;
+      float lum = dot(img, vec3(0.3, 0.55, 0.15));
+      img += img * smoothstep(0.88, 1.0, lum) * 0.6;                   // sole e riflessi tornano a brillare
       vec3 n = normalize(vec3(-w * 2.2, 1.0));
       float spec = pow(max(dot(n, normalize(vec3(0.25, 0.55, 1.0))), 0.0), 40.0);
       float caus = pow(abs(sin(w.x * 9.0 + t * 0.6) * sin(w.y * 8.0 - t * 0.5)), 3.0);
-      img *= 0.94 + 0.16 * (n.x + n.y);
-      img = mix(img, img * (0.8 + 0.4 * uC1), 0.15);                   // velo del colore del portale
-      img += (vec3(0.9, 0.95, 1.0) * spec * 0.25 + uC2 * caus * 0.05) * lit;
-      img *= 1.0 - 0.30 * smoothstep(RI - 1.4, RI, r);                 // l'acqua sprofonda sotto l'anello
-      img += uC2 * exp(-(RI - r) * 2.4) * 0.28 * lit;                  // e ne riflette la luce
+      img *= 0.97 + 0.10 * (n.x + n.y);
+      img = mix(img, img * (0.85 + 0.3 * uC1), 0.08);                  // un velo appena del colore del portale
+      img += (vec3(0.9, 0.95, 1.0) * spec * 0.22 + uC2 * caus * 0.04) * lit;
+
+      // ---- contorno etereo: il raggio respira, la fascia sfuma in veli di luce ----
+      vec2 dir = p / max(r, 1e-3);
+      float n1 = fbm3(dir * 2.2 + vec2(t * 0.10, -t * 0.07));          // ondeggio largo e lento
+      float n2 = fbm3(dir * 6.5 + vec2(-t * 0.21, t * 0.16) + 3.7);    // increspatura fine
+      float wsp = fbm3(p * 0.9 + vec2(t * 0.15, -t * 0.5));            // veli che salgono
+      float wob = ((n1 - 0.5) + (n2 - 0.5) * 0.35) * WOB * mix(0.3, 1.0, lit);
+      float d = (r + wob - RC) / HW;                // -1 = bordo verso l'acqua, +1 = verso il muro
+
+      img *= 1.0 - 0.18 * smoothstep(-5.0, -1.0, d);                   // l'acqua sprofonda sotto il contorno
       img = mix(vec3(dot(img, vec3(0.3, 0.55, 0.15))) * 0.16, img, lit);   // spento: scuro
       img = mix(vec3(0.006, 0.012, 0.02), img, om);                    // non ancora aperto: buio
 
-      // ---- anello: bordi scuri netti, fascia colorata, filo bianco al centro ----
-      float e = r - RI;
-      float prof = 1.0 - abs(clamp(e / (R - RI), 0.0, 1.0) * 2.0 - 1.0);   // 0 ai bordi, 1 in mezzo
+      float core = exp(-d * d * 2.6);               // la fascia: piena al centro, sfumata ai lati
+      float df = (d + (n2 - 0.5) * 0.9) / 0.26;
+      float fil = exp(-df * df);                    // filo bianco che serpeggia dentro la fascia
       float comet = pow(0.5 + 0.5 * cos((ang - t * 0.03) * PI2 * 3.0), 10.0);   // tre luci che girano
-      float flow = 0.5 + 0.5 * sin(ang * PI2 * 9.0 - t * 0.9);
-      vec3 ring = mix(uC1 * 0.45, uC1 * 1.1, prof);
-      ring += uC2 * pow(prof, 3.0) * (0.7 + 0.5 * comet + 0.15 * flow);
-      ring += vec3(1.0) * smoothstep(0.78, 0.94, prof) * (0.55 + 0.9 * comet);
-      ring *= mix(0.14, 1.0, lit);
-      ring = mix(vec3(0.008, 0.022, 0.045), ring, smoothstep(0.16, 0.30, prof));
+      vec3 gcol = mix(uC1, uC2, smoothstep(0.3, 0.7, fbm3(p * 0.35 + vec2(t * 0.25, -t * 0.4))));
+      vec3 ring = uC1 * core * (0.45 + 0.8 * wsp);
+      ring += uC2 * pow(core, 3.0) * (0.5 + 0.45 * comet + 0.4 * wsp);
+      ring += vec3(1.0) * fil * (0.4 + 0.9 * comet);
+      // alone: più tenue sull'acqua (non vela la veduta), più largo verso il muro
+      float halo = exp(-abs(d) * 1.15) * (0.2 + 0.8 * wsp * wsp) * mix(0.55, 1.0, smoothstep(-0.5, 0.5, d));
+      ring += gcol * halo * 0.4;
+      float edge = 1.0 - smoothstep(RG - 0.3, RG - 0.04, r);           // mai un taglio sul bordo della mesh
+      ring *= mix(0.14, 1.0, lit) * edge;
 
-      gl_FragColor = vec4(mix(img, ring, smoothstep(-0.02, 0.02, e)), 1.0);
+      float cov = smoothstep(0.05, 0.5, core * (0.7 + 0.6 * wsp)) * edge;   // quanto la fascia copre
+      float mw = 1.0 - smoothstep(-0.6, 0.1, d);                            // dove c'è l'acqua
+      // alfa premoltiplicato: fuori dalla fascia resta la muratura, i veli si sommano
+      gl_FragColor = vec4(img * mw * (1.0 - cov) + ring, mw + (1.0 - mw) * cov);
       #include <colorspace_fragment>
     }
   `;
 
   /* =========================================================
-     MARE — IL MURO SFONDATO attorno all'anello
-     bordo a schegge, muratura nello spessore, crepe, luce del portale, scariche
+     MARE — IL MURO SFONDATO attorno al portale
+     bordo a schegge, muratura nello spessore, crepe, luce del portale, scariche.
+     La muratura continua anche SOTTO la fascia (la mesh parte più dentro di R):
+     dove il contorno etereo si dirada si vede lei, non l'intonaco della parete.
      ========================================================= */
   const VERT_BREAK = `
     varying vec2 vP;
@@ -57124,7 +57192,6 @@ const HubRift = (function () {
 
   function build(parent, available) {
     if (group) { parent.add(group); return; }
-    const views = bakeViews();
     const sea = RIFTS[0], sp = RIFTS[1];
     const drop = () => ({ value: new T.Vector4(0, 0, -99, 0) });
     const soft = (blur, tap) => {
@@ -57134,21 +57201,22 @@ const HubRift = (function () {
     };
     group = new T.Group();
 
-    // MARE: prima il muro sfondato, sopra il disco (il suo bordo copre l'attacco)
+    // MARE: prima il muro sfondato, sopra il disco (la fascia copre l'attacco)
     UB = {
       uT, uLit: { value: 1 },
       uC1: { value: lin(sea.a) }, uC2: { value: lin(sea.b) },
       uPlaster: { value: lin(WALL_PAL.plaster) }, uBrickA: { value: lin(WALL_PAL.brickA) },
       uBrickB: { value: lin(WALL_PAL.brickB) }, uMortar: { value: lin(WALL_PAL.mortar) }
     };
-    group.add(panel(new T.RingGeometry(SEA.R - 0.08, SEA.R + SEA.EXT, 72, 1),
+    group.add(panel(new T.RingGeometry(SEA.R - SEA.WOB, SEA.R + SEA.EXT, 72, 1),
       material(VERT_BREAK, FRAG_BREAK, UB), SEA.a, SEA.y, 0, 2));
     US = {
-      tView: { value: views.sea }, uT, uOpen: { value: 1 }, uLit: { value: 1 }, uDrop: drop(),
+      tView: { value: boatLevel.portalView(TEX_SEA) },      // fotografia del livello vero (15f)
+      uT, uOpen: { value: 1 }, uLit: { value: 1 }, uDrop: drop(),
       uC1: { value: lin(sea.a) }, uC2: { value: lin(sea.b) }
     };
-    group.add(panel(new T.CircleGeometry(SEA.R, 96),
-      material(VERT_DISC, FRAG_DISC, US, soft("1.8", "0.008")), SEA.a, SEA.y, 0.02, 3));
+    group.add(panel(new T.CircleGeometry(SEA.R + SEA.PAD, 96),
+      material(VERT_DISC, FRAG_DISC, US, { DROPS: LOW ? 2 : 3 }), SEA.a, SEA.y, 0.02, 3));
     // i pezzi di muro che fluttuano davanti alla parete (21-hub-9b)
     debris = RiftDebris.build(group, {
       x: D.HX, z: SEA.a - HALF, y: SEA.y, R: SEA.R, yMin: 0.7, yMax: HH - 0.6,
@@ -57157,7 +57225,7 @@ const HubRift = (function () {
 
     // SPAZIO: il riquadro nella sua metà
     UR = {
-      tView: { value: views.space }, uT, uOpen: { value: 1 }, uLit: { value: 1 }, uDrop: drop(),
+      tView: { value: bakeSpaceView() }, uT, uOpen: { value: 1 }, uLit: { value: 1 }, uDrop: drop(),
       uSize: { value: new T.Vector2(HALF, HH) },
       uC1: { value: lin(sp.a) }, uC2: { value: lin(sp.b) }
     };
@@ -57182,6 +57250,7 @@ const HubRift = (function () {
     openT = 0;
     for (const r of RIFTS) r.taken = false;
     if (group) US.uOpen.value = UR.uOpen.value = 0;
+    boatLevel.refreshPortalView();                  // rifatta qui se il contesto grafico si era perso nel mare
   }
 
   function update(dt, t) {
