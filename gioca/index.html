@@ -1581,7 +1581,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwfdvkhv";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwfdwzz2";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -2526,9 +2526,10 @@ const Haptics = (() => {
   // brevissima (il motorino non fa in tempo ad andare a pieno regime).
   // ATTENZIONE AL MINIMO: se il tick è troppo corto il motorino non fa in tempo a
   // partire e NON SI SENTE NULLA. Provato sul telefono dell'utente il 2026-11-13
-  // con una pagina di prova a più durate: 12 e 40 ms muti, 80 ms "perfetto".
+  // con una pagina di prova a più durate: 12 e 40 ms muti, 80 ms si sente bene;
+  // nel gioco l'utente ha poi chiesto di alzarlo a 100 ms.
   // Per alleggerire o rinforzare il tick si ritocca solo questo numero.
-  const TICK_MS = 80;                       // tick base dello stile aptico
+  const TICK_MS = 100;                     // tick base dello stile aptico
   const GRAB_MS = TICK_MS;                  // presa della palla
 
   function vibrate(arg) {
