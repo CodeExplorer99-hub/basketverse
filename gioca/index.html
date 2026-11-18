@@ -1682,7 +1682,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwme702v";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwmlzgsr";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -2451,9 +2451,9 @@ function returnStolenShot() {
 }
 
 /* ============================================================
-   STATISTICHE DEL TIRO — potenza, gittata, arco, tocco, oscillazione
-   (PRECISIONE eliminata il 2026-11-18: la linea di mira non è più una stat,
-   compare SOLO col potenziamento volante MIRA GUIDATA, vedi 10-physics)
+   STATISTICHE DEL TIRO — potenza, gittata, arco, tocco, precisione, oscillazione
+   (PRECISIONE: quanta linea di mira si vede sul tiro normale, da 2 trattini
+   alla linea intera della MIRA GUIDATA, vedi 10-physics)
    ------------------------------------------------------------
    Valori VERI che pilotano tiro e fisica (non numeri decorativi),
    ricavati dalla dinamica reale di un tiro di basket. Ogni statistica
@@ -2483,6 +2483,7 @@ game.stats = {
   gittata:      { base: 0, bonus: 0 },
   arco:         { base: 0, bonus: 0 },
   tocco:        { base: 0, bonus: 0 },
+  precisione:   { base: 0, bonus: 0 },
   oscillazione: { base: 0, bonus: 0 },
 };
 
@@ -2492,6 +2493,7 @@ const STAT_INFO = {
   gittata:      { abbr: "RNG", col: "#c9a0ff" },
   arco:         { abbr: "ARC", col: "#ffd24a" },
   tocco:        { abbr: "TCH", col: "#7bd88f" },
+  precisione:   { abbr: "PRC", col: "#59d9ff" },
   oscillazione: { abbr: "OSC", col: "#ff5fa2" },
 };
 
@@ -2536,6 +2538,14 @@ const Stats = {
   //   sul ferro rotolano dentro) e più giri di rilascio (~+20% margine reale).
   rimSoft()   { return 1 - statT("tocco") * 0.28; },             // 1.0 (lv0) … 0.72 (lv5)
   spinBoost() { return 1 + statT("tocco") * 0.5;  },             // backspin di rilascio ×1.0 … ×1.5
+
+  // PRECISIONE → SOLO aiuto visivo, nessuna casualità: quanta LINEA DI MIRA del
+  //   tiro normale si vede (updateAimHelpers, 10-physics). Ogni livello aggiunge
+  //   trattini della STESSA linea della MIRA GUIDATA, ricostruendola dalla palla in
+  //   avanti: lv0 = i primi 2 trattini, lv5 = la linea intera col mirino, identica
+  //   al potenziamento.
+  aimLineFrac() { return statT("precisione"); },                 // 0 (2 trattini) … 1 (linea intera)
+  aimLineFull() { return statLevel("precisione") >= STAT_MAX; },
 
   // OSCILLAZIONE → stabilità delle mani: scala l'ampiezza dell'ondeggio "handheld"
   //   della visuale mentre si tiene/prepara il tiro (12-loop). Le mani più ferme
@@ -22444,6 +22454,22 @@ function showAimLine(mesh, l, reach, count, t) {
   return res;
 }
 
+/* Linea di mira PARZIALE della stat PRECISIONE: gli stessi trattini della MIRA
+   GUIDATA (stesso passo, stesso scorrimento, stesso volo vero), ma solo i primi
+   dalla palla in avanti. f = 0 → AIM_LINE_MIN_DASH trattini; f = 1 → tutti
+   quelli della linea intera. In coda sfuma solo il trattino che sta uscendo. */
+const AIM_LINE_MIN_DASH = 2;
+function showAimLineFrac(mesh, l, f, t) {
+  const ox = ball.x + (l.ox || 0), oy = ball.y + (l.oy || 0), oz = ball.z + (l.oz || 0);
+  predictPath(ox, oy, oz, l.vx, l.vy, l.vz, releaseSpin(l), true);
+  const n = _pathCum(predictPts);
+  const total = n > 1 ? _cum[n - 1] : 0;
+  const s0 = ball.r + 0.04, period = AIM_DASH_LEN + AIM_DASH_GAP;
+  const nAll = Math.max(AIM_LINE_MIN_DASH, Math.ceil((total - s0) / period));
+  const len = (AIM_LINE_MIN_DASH + (nAll - AIM_LINE_MIN_DASH) * f) * period;
+  drawDashes(mesh, predictPts, s0, s0 + len, AIM_DASH_LEN, 1, t, 0);
+}
+
 function updateAimHelpers(t) {
   // Segnala se, mentre carico, il tiro in preparazione sarà una PARABOLA
   // (campana armata dalla frustata) e non il tiro normale o DRITTO (mazzafionda).
@@ -22467,23 +22493,25 @@ function updateAimHelpers(t) {
       if (powerValEl) powerValEl.style.opacity = performance.now() - powerHoldT0 < POWER_NUM_SHOW_MS ? 1 : 0;
       reticle.visible = false;
       /* LINEA DI MIRA TRATTEGGIATA, sul volo VERO (predictPath).
-         REGOLA (2026-11-18): compare SOLO col potenziamento volante MIRA GUIDATA,
-         e sempre a pieno regime: linea intera fino all'arrivo, col mirino
-         (oro = canestro, arancio = ferro). Senza MIRA GUIDATA nessuna linea, né
-         sul tiro normale né sulla mazzafionda. Col TIRO A PARABOLA armato (aura
-         verde) nessuna linea comunque — la segnala solo l'aura. */
+         • MIRA GUIDATA (potenziamento volante): linea intera fino all'arrivo, col
+           mirino (oro = canestro, arancio = ferro), anche sulla mazzafionda.
+         • Tiro NORMALE senza MIRA GUIDATA: stat PRECISIONE — i primi trattini
+           della STESSA linea, 2 a lv0, sempre di più a ogni livello; a lv5 è la
+           linea della MIRA GUIDATA identica, mirino compreso.
+         • Mazzafionda senza MIRA GUIDATA: nessuna linea.
+         Col TIRO A PARABOLA armato (aura verde) nessuna linea comunque — la
+         segnala solo l'aura. */
       const guided = game.aimGuideTimer > 0;
-      if (guided && !game.parabolaAim) {
+      const full = guided || (!l.straight && Stats.aimLineFull());
+      if (full && !game.parabolaAim) {
         aimDots.visible = true;
         syncHoopPolePhysics();   // palo nella posa di questo frame (la balena si muove anche a palla ferma)
         const res = showAimLine(aimDash, l, 1, 0, t);
         if (res) placeReticle(res, t);
       } else if (!l.straight && !game.parabolaAim) {
-        /* TIRO NORMALE senza MIRA GUIDATA (2026-11-18): solo il PRIMO
-           trattino della linea, fermo, per dare il senso della direzione.
-           Niente mirino, niente linea intera. */
         aimDots.visible = true;
-        showAimLine(aimDash, l, 0, 1, t);
+        syncHoopPolePhysics();
+        showAimLineFrac(aimDash, l, Stats.aimLineFrac(), t);
       } else {
         aimDots.visible = false;
         aimDash.count = 0;
@@ -24314,6 +24342,8 @@ const STAT_ICONS = {
   arco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20 Q12 1 20 20"/><circle cx="12" cy="20" r="1.8" fill="currentColor" stroke="none"/></svg>',
   // TOCCO — palla con freccia di backspin
   tocco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="5.4"/><path d="M5.5 9.2 Q12 4 18.6 8.2"/><path d="M18.6 8.2 l-3.4 -.4 M18.6 8.2 l-.5 3.3"/></svg>',
+  // PRECISIONE — bersaglio
+  precisione: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.6"/><circle cx="12" cy="12" r="0.7" fill="currentColor" stroke="none"/><path d="M12 1.5 V4 M12 20 V22.5 M1.5 12 H4 M20 12 H22.5" stroke-linecap="round"/></svg>',
   // OSCILLAZIONE — onda (l'ondeggio che si vuole calmare)
   oscillazione: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12 Q5.5 4 9 12 T16 12 T23 12"/></svg>',
 };
@@ -24324,6 +24354,7 @@ const STAT_UI = {
   gittata:      { nome: "RANGE",     desc: "Verticality: carries farther and drops in" },
   arco:         { nome: "ARC",       desc: "Easier, higher lob · wider window" },
   tocco:        { nome: "TOUCH",     desc: "Soft backspin: rolls in off the rim" },
+  precisione:   { nome: "PRECISION", desc: "Longer aim line · full guide at max" },
   oscillazione: { nome: "SWAY",      desc: "Steadier hands: less sway while aiming" },
 };
 
@@ -26638,7 +26669,12 @@ function loop(now) {
   // ---------- tabellone che vibra ----------
   game.boardShake *= Math.exp(-4.2 * dt);
   const bsAmp = Math.sin(t * 40) * game.boardShake * 0.030;
-  hoopGroup.position.x  = hoop.x + bsAmp;
+  // Solo col canestro appeso alla scena (coordinate mondo). Quando un livello
+  // lo aggancia a un suo gruppo (mare: hoopMount sul dorso della balena) la
+  // posa locale è sua: riscriverla con hoop.x (che è in coord. MONDO) faceva
+  // scivolare il canestro sul dorso e lo spostava DOPO la camera del frame,
+  // cioè il cannone (figlio di hoopGroup) tremava sotto la visuale.
+  if (hoopGroup.parent === scene) hoopGroup.position.x = hoop.x + bsAmp;
   boardMat.emissiveIntensity = game.boardShake * 0.55;
   boardMat.opacity = 0.30 + game.boardShake * 0.18;
 
@@ -27713,7 +27749,8 @@ const Substitution = (function () {
   }
 
   function update(dt, t) {
-    if (game.menuOpen && (playerSpot.on || logT >= 0 || (log && log.visible))) snapHome();
+    // menù aperto → a casa; non durante la dissolvenza, quando l'hub rimette il giocatore sul binario
+    if (game.menuOpen && !MainMenu.isClosing() && (playerSpot.on || logT >= 0 || (log && log.visible))) snapHome();
     // arma il tiro partito con la palla avvolta nell'aura
     if (ball.state === "ready") {
       armed = false;
@@ -28852,7 +28889,7 @@ const boatLevel = (function () {
     krakenFx: { hitCD: 0, flash: 0, shake: 0 },   // lampo rosso + scossone della palla (BallDamage)
     boatHits: 0, sinking: false,               // colpi di tentacolo subiti + affondamento
     whaleLoop: 0, attackPending: false,        // conteggio giri della balena + colpo armato (vedi bossWhalePos)
-    whaleBack: 0,                              // arretramento della balena mentre il tentacolo frontale è fuori
+    whalePause: 0,                             // secondi in cui la balena è rimasta FERMA (tentacolo d'attacco fuori)
     // --- meccanica "abbatti gli scudi per fermare la frustata" ---
     // Ogni tentacolo-scudo distrutto col cannone ritarda la prossima frustata
     // di +30 s (attackHoldUntil, in tempo-boss t). Distrutti TUTTI e 5 →
@@ -28907,16 +28944,20 @@ const boatLevel = (function () {
      invece nuota con un ping-pong lento in profondità: parte LONTANA (inizio
      giro), si avvicina e torna al largo. Quando è lontana la deriva laterale si
      spegne, così è centrata in x e il suo fianco destro non tocca il polpo
-     gigante (a x=6.3). Mentre il tentacolo frontale è fuori la balena non scende
-     sotto BOSS_WHALE_ARM_CLEAR (arretra un attimo se serve, finale.whaleBack in
-     15f), quindi non c'è compenetrazione in nessuna fase del colpo. */
+     gigante (a x=6.3). Mentre il tentacolo frontale è fuori (dall'emersione al
+     rientro in acqua) la balena si FERMA dov'è: il suo orologio di nuoto
+     (bossWhaleT) non avanza e riparte da lì, senza scatti. Il colpo parte solo
+     con la balena oltre BOSS_WHALE_ARM_CLEAR, quindi ferma resta staccata dal
+     tentacolo in ogni fase del colpo. */
   const BOSS_WHALE_W     = 0.42;   // frequenza del ciclo (giro completo ~2π/W ≈ 15 s → 4 giri ≈ 60 s)
   const BOSS_WHALE_ZFAR  = 7.2;    // profondità al punto più LONTANO (inizio giro) — 1 m più vicina alla barca
   const BOSS_WHALE_ZNEAR = 5.9;    // profondità al punto più VICINO (bordo balena ~4.74)
-  // Tentacolo frontale fuori (boatAttack non "idle"): la balena non scende sotto
-  // questa profondità (bordo ~5.74, radice del tentacolo a ~5.06 → libero) e ci
-  // arretra con un'ease breve; a tentacolo rientrato torna sul suo giro.
+  // Il tentacolo frontale emerge solo se la balena è almeno a questa profondità
+  // (bordo ~5.74, radice del tentacolo a ~5.06 → libero); poi lei resta ferma lì.
   const BOSS_WHALE_ARM_CLEAR = 6.9;
+  // Orologio di nuoto della balena nel finale: il tempo-boss meno le pause
+  // fatte col tentacolo d'attacco fuori (finale.whalePause, accumulata in 15f).
+  function bossWhaleT(t) { return t - finale.whalePause; }
   const BOSS_WHALE_XAMP  = 1.3;    // ampiezza della deriva laterale (solo da vicino; a fine largo → 0)
   // Posizione della balena nel finale. u = 0 al punto più LONTANO (inizio giro),
   // 1 al più VICINO. Usata sia dal moto della balena sia dall'aggancio del polpo.
@@ -32582,6 +32623,8 @@ const boatLevel = (function () {
       // Polpo: mantello + tentacoli sopra il bordo
       bounceSphere(0.75 + boatX(), 1.58, 2.55, 0.28, 0.35);   // polpo (morbido)
     }
+    // ---- ANCORA della boss fight (al posto del barile, 15e2) ----
+    collideBallAnchor();
 
     // ---- KRAKEN (polpo gigante): testa, gonna, 5 tentacoli ----
     // Hitbox attivi solo durante il finale quando il polpo è emerso/visibile.
@@ -32909,7 +32952,7 @@ const boatLevel = (function () {
       // il cartellone passa alle istruzioni della boss fight
       drawBanner(level.makes);
       // da adesso si conta il ciclo della balena: il 1° colpo dopo N giri
-      finale.whaleLoop = Math.floor((t * BOSS_WHALE_W) / (2 * Math.PI));
+      finale.whaleLoop = Math.floor((bossWhaleT(t) * BOSS_WHALE_W) / (2 * Math.PI));
       finale.attackPending = false;
       finale.attackHoldUntil = 0; finale.attackDisabled = false;   // scudi tutti integri: frustata attiva
       // Le mine NON si ricevono più all'inizio della battaglia: ora arrivano
@@ -32939,7 +32982,8 @@ const boatLevel = (function () {
     // Se tutti e 5 i tentacoli-scudo sono stati distrutti col cannone, il
     // tentacolo d'attacco NON esce più: niente conteggio giri, niente colpo.
     if (finale.shown && finale.krakenHP > 0 && !finale.sinking && !finale.attackDisabled) {
-      const loop = Math.floor((t * BOSS_WHALE_W) / (2 * Math.PI));
+      const wt = bossWhaleT(t);           // orologio di nuoto (fermo col tentacolo fuori)
+      const loop = Math.floor((wt * BOSS_WHALE_W) / (2 * Math.PI));
       if (loop - finale.whaleLoop >= BOAT_ATTACK_EVERY_LOOPS) {
         finale.whaleLoop = loop;          // riparte il conteggio dei giri
         finale.attackPending = true;      // colpo armato: parte al prossimo istante utile
@@ -32947,8 +32991,11 @@ const boatLevel = (function () {
       // Rinvio: ogni tentacolo-scudo distrutto sposta attackHoldUntil avanti di
       // 30 s (vedi explodeTentacle). Finché non è passato, il colpo armato resta
       // in attesa e non parte.
+      // Parte solo con la balena al largo (oltre BOSS_WHALE_ARM_CLEAR): da lì
+      // resta ferma finché il tentacolo non rientra, quindi non lo tocca mai.
       if (finale.attackPending && t >= finale.attackHoldUntil &&
-          boatAttack.phase === "idle" && cannonCtl.phase === "off") {
+          boatAttack.phase === "idle" && cannonCtl.phase === "off" &&
+          bossWhalePos(wt).z >= BOSS_WHALE_ARM_CLEAR) {
         finale.attackPending = false;
         triggerBoatAttack();
       }
@@ -35114,7 +35161,7 @@ const boatLevel = (function () {
     // z resta fisso (il polpo non insegue la balena in profondità): quando la
     // balena si allontana in z, il polpo la lascia andare — nessuna
     // compenetrazione perché è tutto sul lato +x, ben staccato dal corpo.
-    const wdriftX = bossWhalePos(t).x;            // identica alla deriva laterale della balena
+    const wdriftX = bossWhalePos(bossWhaleT(t)).x;   // identica alla deriva laterale della balena
     giantOcto.position.x = GIANT_X + wdriftX;
     // galleggiamento verticale leggero (solo quando e' emerso: *e)
     const bob = Math.sin(t * 0.55) * 0.07 * e;
@@ -36344,6 +36391,1009 @@ const boatLevel = (function () {
   }
 
   /* =========================================================
+     ANCORA CON CATENA — boss fight del mare (2026-11-18, richiesta utente)
+     ---------------------------------------------------------
+     Appena parte la boss fight il barile si rompe (startFinale, 15c) e al
+     suo posto CADE un'ANCORA grande, legata con una CATENA a maglie con
+     traversino che esce da una cubia sul capo di banda della prua.
+     - Modello: ancora "ammiragliato" in ferro battuto arrugginito: fuso
+       rastremato, diamante, marre ad arco con palme e unghie, ceppo
+       trasversale con le palle in punta, occhio e cicala (anello).
+     - Fisica: CORPO RIGIDO vero (XPBD a sotto-passi): gravità, inerzia,
+       rotazione, contatti a punti campione con attrito e un filo di
+       rimbalzo contro ponte / fondo scafo / murata / capo di banda,
+       balena e granchio; in acqua affonda frenata (spinta di Archimede
+       del ferro). Viaggia con la barca quando ci è appoggiata.
+     - Catena: nodi verlet a vincoli di sola trazione (si affastella sul
+       ponte) + vincoli di distanza massima dalla cubia (non si allunga
+       come un elastico); accoppiata all'anello dell'ancora nei due sensi.
+     - Dito: tocchi l'ancora (raggio sul modello o vicino a un suo punto)
+       e la trascini: il punto preso insegue il dito su un piano rivolto
+       alla camera con una presa elastica (pesa, dondola). Lasciata col
+       gesto, VOLA con la velocità del dito (un colpo verso l'alto la
+       manda anche in avanti). RANGE ILLIMITATO per ora: mentre la tieni
+       o vola la catena si srotola libera dalla cubia (ANC.MAX_LEN).
+     - Finita in mare: il verricello la ritira fino alla cubia. Ferma sul
+       ponte: ritira solo la catena lasca in più (resta ordinata).
+     A cosa serve: lo dirà l'utente (per ora è solo l'oggetto fisico).
+     Agganci: updateAnchor (update, 15f), resetAnchor (resetFinale),
+     anchorGrabDown/Move/Up (presa del livello, 15f), collideBallAnchor
+     (collideBall, 15c).
+     ========================================================= */
+  const ANC = {
+    M: 200,                        // massa (kg): ancora da ~1,5 m in ferro pieno
+    I: [34, 9, 38],                // inerzia principale attorno al baricentro (assi del corpo)
+    COM_Y: 0.49,                   // baricentro sopra il diamante (coord. modello)
+    SUB: 8,                        // sotto-passi di fisica per frame
+    G: 9.81,
+    MU_BOAT: 0.55, MU_SKIN: 0.35,  // attrito ferro/legno, ferro/pelle
+    E: 0.12,                       // rimbalzo (ferro pesante: quasi nullo)
+    GRAB_HZ: 2.5,                  // frequenza della presa del dito (morbida: si sente il peso)
+    SEG: 0.25,                     // passo dei nodi fisici della catena (m)
+    NODE_M: 4,                     // massa di un tratto di catena (kg)
+    NODE_R: 0.028,                 // raggio di contatto di un tratto
+    LINK_P: 0.097,                 // passo della maglia (lunghezza interna)
+    MAX_LEN: 80,                   // "range illimitato per ora": più di tutto ciò che si vede
+    HAUL_WET: 3.0,                 // verricello: ritira l'ancora finita in mare (m/s)
+    HAUL_SLACK: 1.0,               // ritira la catena lasca in più (m/s)
+    SLACK: 1.2,                    // catena lasca lasciata sul ponte (m)
+    SPAWN_T: 0.35,                 // secondi dopo la rottura del barile
+    THROW_K: 1.25,                 // il lancio prende la velocità del dito × THROW_K...
+    THROW_FWD: 1.5,                // ...e la parte verso l'alto spinge anche in avanti
+    THROW_MAX: 26
+  };
+  // capo della catena: foro della cubia sul capo di banda di prua (coord. locali della barca)
+  const ANC_FAIR_L = new T.Vector3(0, 0.775, -3.70);
+  // dove compare: il posto del barile (locale barca), un metro sopra il fondo
+  const ANC_SPAWN_L = new T.Vector3(0.62, 1.45, -2.55);
+  // sezioni solide della barca (locali, verificate sulla geometria vera):
+  // fondo scafo a 0.40 (quasi tutta la barca), ponte a 0.16 nel pozzetto di
+  // prua, murata spessa ANC_WALL_T fino alla cima del capo di banda
+  const ANC_HULL_TOP = 0.40, ANC_DECK = 0.16, ANC_HULL_BOT = -0.99, ANC_RAIL = 0.695;
+  const ANC_WALL_T = 0.07, ANC_HULL_BEVEL = 0.12;
+  const ANC_PULL_MAX = 4.0;          // velocità massima con cui la catena tesa trascina l'ancora (m/s)
+
+  // punti di contatto del corpo (coord. modello: diamante a y=0, fuso lungo +y,
+  // marre nel piano XY, ceppo lungo Z) + raggio
+  const ANC_PTS = (() => {
+    const out = [
+      [0, 1.505, 0, 0.035],          // cicala (in cima)
+      [0, 1.25, 0, 0.06],            // occhio
+      [0, 1.06, 0.565, 0.05],        // palle del ceppo
+      [0, 1.06, -0.565, 0.05],
+      [0, 0.66, 0, 0.06],            // fuso
+      [0, 0.035, 0, 0.08]            // diamante
+    ];
+    for (const s of [-1, 1]) {
+      out.push([s * 0.339, 0.125, 0, 0.05]);      // marra
+      out.push([s * 0.568, 0.425, 0, 0.02]);      // unghia
+      out.push([s * 0.51, 0.296, 0.15, 0.02]);    // spigoli delle palme
+      out.push([s * 0.51, 0.296, -0.15, 0.02]);
+    }
+    return out;
+  })();
+  const ANC_RING_M = [0, 1.505, 0];               // aggancio della catena (coord. modello)
+
+  const anchor = {
+    on: false, built: false, grp: null, mesh: null, fair: null, chain: null, maxLinks: 0,
+    pos: new T.Vector3(), q: new T.Quaternion(), v: new T.Vector3(), w: new T.Vector3(),
+    pPrev: new T.Vector3(), qPrev: new T.Quaternion(), v0: new T.Vector3(), w0: new T.Vector3(),
+    Iinv: new T.Vector3(), pts: [], ring: new T.Vector3(),
+    wpts: [],                      // punti campione nel mondo (per la palla)
+    spawned: false,                // già comparsa in questa boss fight
+    held: false, grabL: new T.Vector3(), target: new T.Vector3(),
+    planeN: new T.Vector3(), planeD: 0, hist: [],
+    flying: false, flyT: 0, hauling: false, sleep: false, still: 0,
+    boatContact: false, whaleContact: false, prevY: 0, impact: 0, sndCD: 0,
+    // catena
+    X: null, P: null, C: null, n: 0, firstLen: 0, maxN: 0
+  };
+  const _aq = new T.Quaternion(), _aqi = new T.Quaternion();
+  const _av1 = new T.Vector3(), _av2 = new T.Vector3(), _av3 = new T.Vector3(), _av4 = new T.Vector3();
+  const _ar = new T.Vector3(), _an = new T.Vector3(), _ap = new T.Vector3();
+  const _bM = new T.Matrix4(), _bInv = new T.Matrix4(), _bPrev = new T.Matrix4(), _bD = new T.Matrix4();
+  const _bq = new T.Quaternion(), _bqPrev = new T.Quaternion(), _bqD = new T.Quaternion();
+  const _aFair = new T.Vector3();
+  const _env = { pen: 0, nx: 0, ny: 0, nz: 0, boat: false, whale: false };
+  const _sd = { sd: 0, nx: 0, nz: 0 }, _sdD = { sd: 0, nx: 0, nz: 0 }, _sdH = { sd: 0, nx: 0, nz: 0 };
+  const _ray = new T.Raycaster();
+  const _contacts = [];
+  for (let i = 0; i < 16; i++) _contacts.push({ r: new T.Vector3(), n: new T.Vector3(), lam: 0, vnPre: 0, mu: 0.5 });
+  let _polyD = null, _polyH = null, _cPolyD = null, _cPolyH = null;
+  let _boatPrevOk = false;
+
+  /* ---------- FERRO BATTUTO ARRUGGINITO ----------
+     Tre mappe dallo STESSO campo: ondulazioni morbide del ferro + chiazze di
+     ruggine. Colore (ferro brunito ↔ ruggine bruna/arancio), canale G =
+     roughness (ferro liscio, ruggine opaca), canale B = metalness (la
+     ruggine non è metallo), normal (la ruggine è in rilievo, a scaglie
+     morbide). Niente rumore per-texel su lucido e rilievo: scintillerebbe. */
+  function anchorIronMaps() {
+    const S = LOW ? 128 : 256, k = S / 256;
+    const h = new Float32Array(S * S), R = new Float32Array(S * S), tone = new Float32Array(S * S);
+    const blob = (F, cx, cy, r, amp) => {
+      const r2 = r * r, RR = Math.ceil(r);
+      for (let dy = -RR; dy <= RR; dy++) for (let dx = -RR; dx <= RR; dx++) {
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= r2) continue;
+        const w = 1 - d2 / r2;
+        const x = ((Math.round(cx) + dx) % S + S) % S, y = ((Math.round(cy) + dy) % S + S) % S;
+        F[y * S + x] += amp * w * w;
+      }
+    };
+    const rnd = Math.random;
+    for (let i = 0; i < 48; i++) blob(h, rnd() * S, rnd() * S, (12 + rnd() * 24) * k, (rnd() - 0.5) * 0.8);
+    // ruggine: grandi chiazze + grappoli più piccoli attorno (mai sotto 4 px)
+    for (let i = 0; i < 26; i++) {
+      const cx = rnd() * S, cy = rnd() * S;
+      blob(R, cx, cy, (14 + rnd() * 22) * k, 0.55 + rnd() * 0.5);
+      for (let j = 0; j < 6; j++) blob(R, cx + (rnd() - 0.5) * 40 * k, cy + (rnd() - 0.5) * 40 * k, (4 + rnd() * 9) * k, 0.4 + rnd() * 0.5);
+    }
+    for (let i = 0; i < 30; i++) blob(tone, rnd() * S, rnd() * S, (10 + rnd() * 26) * k, (rnd() - 0.5) * 1.2);
+    const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+    const mk = () => { const c = makeCanvas(S, S), g = c.getContext("2d"); return { c, g, d: g.createImageData(S, S) }; };
+    const col = mk(), orm = mk(), nor = mk();
+    const Ht = new Float32Array(S * S);
+    for (let i = 0; i < S * S; i++) Ht[i] = h[i] * 0.55 + sm(0.32, 0.75, R[i]) * 0.55;
+    const H = (x, y) => Ht[((y + S) % S) * S + ((x + S) % S)];
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const i = y * S + x, o = i * 4, v = h[i];
+      const m = sm(0.32, 0.75, R[i]);                       // quanta ruggine
+      const tt = Math.min(1, Math.max(0, 0.5 + tone[i]));   // ruggine scura ↔ arancio
+      const n = (rnd() - 0.5) * 4;                          // grana lievissima, solo colore
+      // ferro brunito (più chiaro sui rilievi consumati)
+      const ir = 66 + v * 22 + n, ig = 64 + v * 21 + n, ib = 62 + v * 20 + n;
+      // ruggine: bruno scuro → arancio
+      const rr = 82 + 72 * tt + n, rg = 40 + 32 * tt + n, rb = 22 + 8 * tt + n;
+      col.d.data[o] = Math.max(0, Math.min(255, ir + (rr - ir) * m));
+      col.d.data[o + 1] = Math.max(0, Math.min(255, ig + (rg - ig) * m));
+      col.d.data[o + 2] = Math.max(0, Math.min(255, ib + (rb - ib) * m));
+      col.d.data[o + 3] = 255;
+      const rough = (0.40 - v * 0.08) + (0.90 - (0.40 - v * 0.08)) * m;
+      const metal = 0.82 + (0.10 - 0.82) * m;
+      orm.d.data[o] = 255;
+      orm.d.data[o + 1] = Math.max(40, Math.min(255, rough * 255));
+      orm.d.data[o + 2] = Math.max(0, Math.min(255, metal * 255));
+      orm.d.data[o + 3] = 255;
+      const hx = H(x + 1, y) - H(x - 1, y), hy = H(x, y + 1) - H(x, y - 1);
+      let nx = -hx * 3.2, ny = hy * 3.2, nz = 1;
+      const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+      nor.d.data[o] = (nx * 0.5 + 0.5) * 255; nor.d.data[o + 1] = (ny * 0.5 + 0.5) * 255;
+      nor.d.data[o + 2] = (nz * 0.5 + 0.5) * 255; nor.d.data[o + 3] = 255;
+    }
+    col.g.putImageData(col.d, 0, 0);
+    orm.g.putImageData(orm.d, 0, 0);
+    nor.g.putImageData(nor.d, 0, 0);
+    // colature di ruggine (verticali, sfumate) solo sul colore
+    for (let i = 0; i < 22; i++) {
+      const x = rnd() * S, y = rnd() * S, L = (18 + rnd() * 50) * k;
+      const gr = col.g.createLinearGradient(x, y, x, y + L);
+      gr.addColorStop(0, "rgba(120,58,24,0.30)"); gr.addColorStop(1, "rgba(120,58,24,0)");
+      col.g.fillStyle = gr; col.g.fillRect(x - 1.5 * k, y, 3 * k, L);
+    }
+    const out = { map: canvasTexture(col.c, true), orm: canvasTexture(orm.c, false), normal: canvasTexture(nor.c, false) };
+    for (const t of Object.values(out)) { t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(3, 3); }
+    return out;
+  }
+
+  // fonde geometrie già in posa (indicizzate o no) in una sola, senza indice
+  function anchorMerge(geos) {
+    const parts = geos.map((g) => (g.index ? g.toNonIndexed() : g));
+    let nv = 0;
+    for (const g of parts) nv += g.attributes.position.count;
+    const out = new T.BufferGeometry();
+    for (const [name, sz] of [["position", 3], ["normal", 3], ["uv", 2]]) {
+      const arr = new Float32Array(nv * sz);
+      let o = 0;
+      for (const g of parts) { arr.set(g.attributes[name].array, o); o += g.attributes.position.count * sz; }
+      out.setAttribute(name, new T.BufferAttribute(arr, sz));
+    }
+    for (const g of geos) g.dispose();
+    for (const g of parts) g.dispose();
+    out.computeBoundingSphere();
+    return out;
+  }
+
+  // arco delle marre: da unghia a unghia passando per il diamante (piano XY)
+  const ANC_ARC_C = 0.62, ANC_ARC_R = 0.6, ANC_ARC_PHI = 1.24;
+  class AnchorArc extends T.Curve {
+    getPoint(t, target) {
+      const p = target || new T.Vector3();
+      const f = (2 * t - 1) * ANC_ARC_PHI;
+      return p.set(ANC_ARC_R * Math.sin(f), ANC_ARC_C - ANC_ARC_R * Math.cos(f), 0);
+    }
+  }
+
+  function buildAnchorModel(mat) {
+    const G = [];
+    const add = (g) => { G.push(g); return g; };
+    // FUSO: rastremato verso l'occhio, sezione appena schiacciata
+    add(new T.CylinderGeometry(0.042, 0.058, 1.16, 22, 6).scale(1, 1, 0.82).translate(0, 0.62, 0));
+    // DIAMANTE: raccordo fuso/marre
+    add(new T.SphereGeometry(0.085, 22, 14).scale(1.35, 0.85, 0.82).translate(0, 0.035, 0));
+    // MARRE: un arco solo, grosso al diamante e affilato in punta (unghie)
+    const rAt = (t) => {
+      const u = Math.abs(2 * t - 1);
+      const base = 0.06 - 0.028 * u;
+      return u < 0.86 ? base : base * (1 - Math.pow((u - 0.86) / 0.14, 1.2) * 0.86);
+    };
+    add(taperedTube(new AnchorArc(), rAt, 72, 16, 4, 1));
+    // PALME: piastre a vanga sulle marre, larghe nella direzione del ceppo
+    const sh = new T.Shape();
+    sh.moveTo(-0.15, -0.03);
+    sh.quadraticCurveTo(-0.03, -0.155, 0.07, -0.15);
+    sh.lineTo(0.165, 0);
+    sh.lineTo(0.07, 0.15);
+    sh.quadraticCurveTo(-0.03, 0.155, -0.15, 0.03);
+    sh.closePath();
+    const FL_PHI = 0.89;
+    for (const s of [-1, 1]) {
+      const g = new T.ExtrudeGeometry(sh, { depth: 0.022, bevelEnabled: true, bevelThickness: 0.008,
+        bevelSize: 0.008, bevelSegments: 2, curveSegments: 10 });
+      g.translate(0, 0, -0.011);
+      const f = s * FL_PHI;
+      const cx = ANC_ARC_R * Math.sin(f), cy = ANC_ARC_C - ANC_ARC_R * Math.cos(f);
+      // tangente verso l'unghia
+      const tx = s * Math.cos(f), ty = s * Math.sin(f);
+      const X = new T.Vector3(tx, ty, 0).normalize(), Y = new T.Vector3(0, 0, 1);
+      const Z = new T.Vector3().crossVectors(X, Y);
+      g.applyMatrix4(new T.Matrix4().makeBasis(X, Y, Z).setPosition(cx, cy, 0));
+      add(g);
+    }
+    // OCCHIO in cima al fuso (foro lungo Z) e CICALA che ci passa dentro
+    add(new T.TorusGeometry(0.05, 0.027, 12, 26).translate(0, 1.248, 0));
+    add(new T.TorusGeometry(0.13, 0.024, 14, 44).rotateY(Math.PI / 2).translate(0, 1.375, 0));
+    // CEPPO: barra trasversale rastremata verso le punte, con le palle
+    const prof = [];
+    const SL = 0.545;
+    prof.push(new T.Vector2(0.001, -SL));
+    for (let i = 0; i <= 16; i++) {
+      const y = -SL + (i / 16) * 2 * SL, u = y / SL;
+      prof.push(new T.Vector2(0.026 + 0.016 * (1 - u * u), y));
+    }
+    prof.push(new T.Vector2(0.001, SL));
+    add(new T.LatheGeometry(prof, 20).rotateX(Math.PI / 2).translate(0, 1.06, 0));
+    for (const s of [-1, 1]) {
+      add(new T.SphereGeometry(0.046, 18, 12).translate(0, 1.06, s * 0.565));
+      // spallamenti del ceppo ai lati del fuso
+      add(new T.TorusGeometry(0.037, 0.011, 8, 20).translate(0, 1.06, s * 0.085));
+    }
+    // collare del fuso dove passa il ceppo + chiavetta (zeppa) di fermo
+    add(new T.CylinderGeometry(0.066, 0.066, 0.12, 22).scale(1, 1, 0.9).translate(0, 1.06, 0));
+    add(new T.BoxGeometry(0.014, 0.07, 0.03).translate(0.068, 1.06, 0.11));
+    const geo = anchorMerge(G);
+    geo.translate(0, -ANC.COM_Y, 0);          // origine = baricentro (asse del corpo rigido)
+    geo.computeBoundingSphere();
+    const mesh = new T.Mesh(geo, mat);
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  // maglia con traversino (asse lungo Y, piano XY): passo interno ANC.LINK_P
+  function buildChainLinkGeo() {
+    const a = 0.032, rc = 0.030, rw = 0.0135;
+    class Stadium extends T.Curve {
+      getPoint(t, target) {
+        const p = target || new T.Vector3();
+        const L = 4 * a + 2 * Math.PI * rc;      // perimetro della linea media
+        let s = t * L;
+        if (s < 2 * a) return p.set(rc, -a + s, 0);
+        s -= 2 * a;
+        if (s < Math.PI * rc) { const f = s / rc; return p.set(rc * Math.cos(f), a + rc * Math.sin(f), 0); }
+        s -= Math.PI * rc;
+        if (s < 2 * a) return p.set(-rc, a - s, 0);
+        s -= 2 * a;
+        const f = Math.PI + s / rc;
+        return p.set(rc * Math.cos(f), -a + rc * Math.sin(f), 0);
+      }
+    }
+    const lo = LOW;
+    const link = new T.TubeGeometry(new Stadium(), lo ? 20 : 30, rw, lo ? 6 : 8, true);
+    const stud = new T.CylinderGeometry(0.0085, 0.0085, 2 * rc, lo ? 6 : 8).rotateZ(Math.PI / 2);
+    return anchorMerge([link, stud]);
+  }
+
+  // cubia: zoccolo di ghisa sul capo di banda con l'occhio da cui esce la catena
+  function buildFairlead(mat) {
+    const G = [
+      new T.BoxGeometry(0.2, 0.035, 0.13).translate(0, 0.0175, 0),
+      new T.CylinderGeometry(0.03, 0.045, 0.04, 14).translate(0, 0.05, 0),
+      new T.TorusGeometry(0.058, 0.022, 12, 28).translate(0, ANC_FAIR_L.y - ANC_RAIL, 0)
+    ];
+    const m = new T.Mesh(anchorMerge(G), mat);
+    m.position.set(ANC_FAIR_L.x, ANC_RAIL, ANC_FAIR_L.z);
+    m.receiveShadow = true;
+    return m;
+  }
+
+  function buildAnchor() {
+    const A = anchor;
+    const tx = anchorIronMaps();
+    const mat = new T.MeshStandardMaterial({
+      map: tx.map, normalMap: tx.normal, normalScale: new T.Vector2(1.0, 1.0),
+      roughnessMap: tx.orm, metalnessMap: tx.orm, roughness: 1.0, metalness: 1.0,
+      envMap: skyEnv, envMapIntensity: 1.0
+    });
+    A.grp = new T.Group();
+    A.mesh = buildAnchorModel(mat);
+    A.grp.add(A.mesh);
+    A.grp.visible = false;
+    world.add(A.grp);
+    A.fair = buildFairlead(mat);
+    A.fair.visible = false;
+    boatGroup.add(A.fair);
+    // catena: una InstancedMesh di maglie, quante ne servono alla lunghezza attuale
+    A.maxLinks = Math.ceil(ANC.MAX_LEN / ANC.LINK_P) + 4;
+    A.chain = new T.InstancedMesh(buildChainLinkGeo(), mat, A.maxLinks);
+    A.chain.instanceMatrix.setUsage(T.DynamicDrawUsage);
+    A.chain.frustumCulled = false;
+    A.chain.count = 0;
+    A.chain.visible = false;
+    world.add(A.chain);
+    // fisica
+    A.Iinv.set(1 / ANC.I[0], 1 / ANC.I[1], 1 / ANC.I[2]);
+    A.pts = ANC_PTS.map((p) => ({ l: new T.Vector3(p[0], p[1] - ANC.COM_Y, p[2]), r: p[3] }));
+    A.wpts = A.pts.map(() => new T.Vector3());
+    A.ring.set(ANC_RING_M[0], ANC_RING_M[1] - ANC.COM_Y, ANC_RING_M[2]);
+    A.maxN = Math.ceil(ANC.MAX_LEN / ANC.SEG) + 3;
+    A.X = new Float32Array(A.maxN * 3);
+    A.P = new Float32Array(A.maxN * 3);
+    A.C = new Uint8Array(A.maxN);
+    // perimetri della barca in coord. three LOCALI (x, z): ponte e fondo scafo
+    _polyD = boatWall.map((q) => ({ x: q.x, z: -q.z }));
+    _polyH = boatWall.map((q) => ({ x: q.x, z: q.z - 0.6 }));   // lo scafo estruso è specchiato in z
+    _cPolyD = _polyD.filter((_, i) => i % 3 === 0);
+    _cPolyH = _polyH.filter((_, i) => i % 3 === 0);
+    A.built = true;
+  }
+
+  /* ---------- matematica del corpo rigido ---------- */
+  // out = I⁻¹ (mondo) · v
+  function ancIinv(v, out) {
+    const A = anchor;
+    _aqi.copy(A.q).invert();
+    out.copy(v).applyQuaternion(_aqi);
+    out.x *= A.Iinv.x; out.y *= A.Iinv.y; out.z *= A.Iinv.z;
+    return out.applyQuaternion(A.q);
+  }
+  // massa inversa generalizzata nel punto r (dal baricentro) lungo n
+  function ancW(r, n) {
+    _av3.crossVectors(r, n);
+    ancIinv(_av3, _av4);
+    return 1 / ANC.M + _av3.dot(_av4);
+  }
+  // q += s·½·[w,0]·q
+  function ancRot(q, wx, wy, wz, s) {
+    const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+    const hx = wx * s * 0.5, hy = wy * s * 0.5, hz = wz * s * 0.5;
+    q.x += hx * qw + hy * qz - hz * qy;
+    q.y += hy * qw + hz * qx - hx * qz;
+    q.z += hz * qw + hx * qy - hy * qx;
+    q.w += -hx * qx - hy * qy - hz * qz;
+    q.normalize();
+  }
+  // correzione di posizione (impulso "posizionale" p) nel punto r
+  function ancPosImp(p, r) {
+    const A = anchor;
+    A.pos.addScaledVector(p, 1 / ANC.M);
+    _av3.crossVectors(r, p);
+    ancIinv(_av3, _av4);
+    ancRot(A.q, _av4.x, _av4.y, _av4.z, 1);
+  }
+  function ancVelImp(p, r) {
+    const A = anchor;
+    A.v.addScaledVector(p, 1 / ANC.M);
+    _av3.crossVectors(r, p);
+    ancIinv(_av3, _av4);
+    A.w.add(_av4);
+  }
+  function ancRingWorld(out) {
+    return out.copy(anchor.ring).applyQuaternion(anchor.q).add(anchor.pos);
+  }
+  function ancWake() {
+    const A = anchor;
+    if (!A.sleep) return;
+    A.sleep = false; A.still = 0;
+    A.pPrev.copy(A.pos); A.qPrev.copy(A.q);
+    A.v.set(0, 0, 0); A.w.set(0, 0, 0); A.v0.set(0, 0, 0); A.w0.set(0, 0, 0);
+  }
+
+  /* ---------- ambiente: barca (solidi veri), balena, granchio ---------- */
+  // distanza con segno dal perimetro (positiva dentro) + normale uscente
+  function ancPolySD(P, x, z, o) {
+    let best = Infinity, qx = 0, qz = 0, inside = false;
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+      const ax = P[j].x, az = P[j].z, bx = P[i].x, bz = P[i].z;
+      if (((bz > z) !== (az > z)) && (x < (ax - bx) * (z - bz) / ((az - bz) || 1e-9) + bx)) inside = !inside;
+      const ex = bx - ax, ez = bz - az;
+      let t = ((x - ax) * ex + (z - az) * ez) / (ex * ex + ez * ez || 1e-9);
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const cx = ax + ex * t, cz = az + ez * t;
+      const d2 = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+      if (d2 < best) { best = d2; qx = cx; qz = cz; }
+    }
+    const d = Math.sqrt(best);
+    o.sd = inside ? d : -d;
+    if (d > 1e-6) { o.nx = (x - qx) / d; o.nz = (z - qz) / d; if (inside) { o.nx = -o.nx; o.nz = -o.nz; } }
+    else { o.nx = 0; o.nz = -1; }
+    return o.sd;
+  }
+  // penetrazione di una sfera (coord. locali della barca) nei solidi della barca
+  function ancBoatPush(lx, ly, lz, r, coarse, o) {
+    if (lx < -2.45 || lx > 2.45 || lz < -4.0 || lz > 3.5 || ly - r > ANC_RAIL || ly + r < ANC_HULL_BOT) return 0;
+    const PD = coarse ? _cPolyD : _polyD, PH = coarse ? _cPolyH : _polyH;
+    ancPolySD(PD, lx, lz, _sdD);
+    ancPolySD(PH, lx, lz, _sdH);
+    const sdD = _sdD.sd, sdH = _sdH.sd + ANC_HULL_BEVEL, WT = ANC_WALL_T + r;
+    const inH = sdH > -r && ly - r < ANC_HULL_TOP;
+    const inD = sdD > -r && ly - r < ANC_DECK;
+    const nearW = Math.abs(sdD) < WT;
+    const inW = nearW && ly - r < ANC_RAIL && ly + r > ANC_DECK;
+    if (!inH && !inD && !inW) return 0;
+    // in su: sul fondo scafo / sul ponte / sopra il capo di banda
+    let top = -Infinity;
+    if (sdH > -r) top = ANC_HULL_TOP;
+    if (sdD > -r) top = Math.max(top, ANC_DECK);
+    if (nearW) top = ANC_RAIL;
+    let best = top + r - ly, nx = 0, ny = 1, nz = 0;
+    // fuori bordo, oltre la murata
+    const aOut = sdD + WT;
+    if (aOut < best) {
+      let ok = true;
+      if (!coarse && ly - r < ANC_HULL_TOP) {
+        ancPolySD(PH, lx + _sdD.nx * aOut, lz + _sdD.nz * aOut, _sd);
+        ok = _sd.sd + ANC_HULL_BEVEL <= -r + 1e-3;
+      }
+      if (ok) { best = aOut; nx = _sdD.nx; ny = 0; nz = _sdD.nz; }
+    }
+    // dentro, staccata dalla murata (solo se sta sopra il pavimento lì)
+    if (sdD > 0 && nearW) {
+      const aIn = WT - sdD;
+      if (aIn < best) {
+        let fl = ANC_HULL_TOP;
+        if (!coarse) { ancPolySD(PH, lx - _sdD.nx * aIn, lz - _sdD.nz * aIn, _sd); fl = _sd.sd + ANC_HULL_BEVEL > -r ? ANC_HULL_TOP : ANC_DECK; }
+        if (ly - r >= fl - 1e-3) { best = aIn; nx = -_sdD.nx; ny = 0; nz = -_sdD.nz; }
+      }
+    }
+    // giù dal gradino del fondo scafo, sul ponte del pozzetto di prua
+    if (inH && !coarse) {
+      const aH = sdH + r;
+      if (aH < best && ly - r >= ANC_DECK - 1e-3) {
+        ancPolySD(PD, lx + _sdH.nx * aH, lz + _sdH.nz * aH, _sd);
+        if (_sd.sd > WT) { best = aH; nx = _sdH.nx; ny = 0; nz = _sdH.nz; }
+      }
+    }
+    if (best <= 0) return 0;
+    o.pen = best; o.nx = nx; o.ny = ny; o.nz = nz;
+    return best;
+  }
+  function ancEllPush(px, py, pz, cx, cy, cz, ax, ay, az, r, o) {
+    const dx = px - cx, dy = py - cy, dz = pz - cz;
+    const q = Math.hypot(dx / ax, dy / ay, dz / az);
+    const minA = Math.min(ax, ay, az), rn = r / minA;
+    if (q >= 1 + rn || q < 1e-6) return 0;
+    let gx = dx / (ax * ax), gy = dy / (ay * ay), gz = dz / (az * az);
+    const gl = Math.hypot(gx, gy, gz) || 1;
+    o.pen = (1 + rn - q) * minA; o.nx = gx / gl; o.ny = gy / gl; o.nz = gz / gl;
+    return o.pen;
+  }
+  function ancSphPush(px, py, pz, cx, cy, cz, R, r, o) {
+    const dx = px - cx, dy = py - cy, dz = pz - cz, d = Math.hypot(dx, dy, dz);
+    if (d >= R + r || d < 1e-6) return 0;
+    o.pen = R + r - d; o.nx = dx / d; o.ny = dy / d; o.nz = dz / d;
+    return o.pen;
+  }
+  // contatto più profondo del punto p (mondo three) di raggio r → _env
+  const _eTmp = { pen: 0, nx: 0, ny: 0, nz: 0 };
+  const _eW = new T.Vector3();
+  function ancEnv(p, r, coarse) {
+    const E = _env;
+    E.pen = 0; E.boat = false; E.whale = false;
+    // barca: nel suo riferimento (naviga, sbanda, affonda)
+    _ap.copy(p).applyMatrix4(_bInv);
+    if (ancBoatPush(_ap.x, _ap.y, _ap.z, r, coarse, _eTmp) > E.pen) {
+      _an.set(_eTmp.nx, _eTmp.ny, _eTmp.nz).applyQuaternion(_bq);
+      E.pen = _eTmp.pen; E.nx = _an.x; E.ny = _an.y; E.nz = _an.z; E.boat = true;
+    }
+    if (p.z < -1.5) {
+      if (whaleMeshBody) {
+        whaleMeshBody.getWorldPosition(_eW);
+        if (ancEllPush(p.x, p.y, p.z, _eW.x, _eW.y, _eW.z, BODY_AX, BODY_AY, BODY_AZ, r, _eTmp) > E.pen) {
+          E.pen = _eTmp.pen; E.nx = _eTmp.nx; E.ny = _eTmp.ny; E.nz = _eTmp.nz; E.boat = false; E.whale = true;
+        }
+      }
+      if (whaleMeshHead) {
+        whaleMeshHead.getWorldPosition(_eW);
+        if (ancEllPush(p.x, p.y, p.z, _eW.x, _eW.y, _eW.z, HEAD_AX, HEAD_AY, HEAD_AZ, r, _eTmp) > E.pen) {
+          E.pen = _eTmp.pen; E.nx = _eTmp.nx; E.ny = _eTmp.ny; E.nz = _eTmp.nz; E.boat = false; E.whale = true;
+        }
+      }
+      if (crab) {
+        crab.getWorldPosition(_eW);
+        for (const [dy, R] of [[CAR_Y_OFF, 0.52], [0.80, 0.68]]) {
+          if (ancSphPush(p.x, p.y, p.z, _eW.x, _eW.y + dy, _eW.z, R, r, _eTmp) > E.pen) {
+            E.pen = _eTmp.pen; E.nx = _eTmp.nx; E.ny = _eTmp.ny; E.nz = _eTmp.nz; E.boat = false; E.whale = true;
+          }
+        }
+      }
+    }
+    return E.pen;
+  }
+
+  /* ---------- catena ---------- */
+  function chainSet(i, x, y, z) {
+    const A = anchor, k = i * 3;
+    A.X[k] = A.P[k] = x; A.X[k + 1] = A.P[k + 1] = y; A.X[k + 2] = A.P[k + 2] = z;
+  }
+  function chainTotal() { return anchor.firstLen + (anchor.n - 1) * ANC.SEG; }
+  // fila catena dalla cubia (nodi nuovi all'indice 1)
+  function chainGrow(amount) {
+    const A = anchor, X = A.X, P = A.P, S = ANC.SEG;
+    A.firstLen += amount;
+    while (A.firstLen > S && A.n < A.maxN) {
+      for (let i = A.n; i > 1; i--) {
+        const a = i * 3, b = (i - 1) * 3;
+        X[a] = X[b]; X[a + 1] = X[b + 1]; X[a + 2] = X[b + 2];
+        P[a] = P[b]; P[a + 1] = P[b + 1]; P[a + 2] = P[b + 2];
+        A.C[i] = A.C[i - 1];
+      }
+      A.n++;
+      A.firstLen -= S;
+      // il nuovo tratto esce dalla cubia verso il resto della catena
+      let dx = X[6] - X[0], dy = X[7] - X[1], dz = X[8] - X[2];
+      const l = Math.hypot(dx, dy, dz) || 1;
+      dx /= l; dy /= l; dz /= l;
+      X[3] = X[0] + dx * A.firstLen; X[4] = X[1] + dy * A.firstLen; X[5] = X[2] + dz * A.firstLen;
+      P[3] = X[3] - (X[6] - P[6]); P[4] = X[4] - (X[7] - P[7]); P[5] = X[5] - (X[8] - P[8]);
+      A.C[1] = 0;
+    }
+    if (A.n >= A.maxN) A.firstLen = Math.min(A.firstLen, S);
+  }
+  // il verricello ritira catena (toglie nodi all'indice 1)
+  function chainHaul(amount) {
+    const A = anchor, X = A.X, P = A.P;
+    A.firstLen -= amount;
+    while (A.firstLen < 0.02 && A.n > 2) {
+      for (let i = 1; i < A.n - 1; i++) {
+        const a = i * 3, b = (i + 1) * 3;
+        X[a] = X[b]; X[a + 1] = X[b + 1]; X[a + 2] = X[b + 2];
+        P[a] = P[b]; P[a + 1] = P[b + 1]; P[a + 2] = P[b + 2];
+        A.C[i] = A.C[i + 1];
+      }
+      A.n--;
+      A.firstLen += ANC.SEG;
+    }
+    if (A.n <= 2) A.firstLen = Math.max(A.firstLen, 0.05);
+  }
+
+  /* ---------- comparsa / reset ---------- */
+  function spawnAnchor() {
+    const A = anchor;
+    if (!A.built) buildAnchor();
+    boatGroup.updateMatrixWorld(true);
+    A.on = true; A.held = false; A.flying = false; A.hauling = false; A.sleep = false; A.still = 0;
+    A.pos.copy(ANC_SPAWN_L).applyMatrix4(boatGroup.matrixWorld);
+    A.q.setFromEuler(new T.Euler(1.2, 0.55, 0.35));
+    A.v.set(0, -0.6, 0); A.w.set(1.1, 0.3, -0.7);
+    A.pPrev.copy(A.pos); A.qPrev.copy(A.q);
+    A.prevY = A.pos.y; A.impact = 0; A.sndCD = 0;
+    // catena: dalla cubia all'anello, un metro di lasco che cade sul ponte
+    _aFair.copy(ANC_FAIR_L).applyMatrix4(boatGroup.matrixWorld);
+    ancRingWorld(_av2);
+    const total = _aFair.distanceTo(_av2) + 1.0;
+    A.n = Math.max(2, Math.ceil(total / ANC.SEG));
+    A.firstLen = total - (A.n - 1) * ANC.SEG;
+    for (let i = 0; i < A.n; i++) {
+      const f = i / A.n;
+      chainSet(i, _aFair.x + (_av2.x - _aFair.x) * f,
+        _aFair.y + (_av2.y - _aFair.y) * f - Math.sin(Math.PI * f) * 0.35,
+        _aFair.z + (_av2.z - _aFair.z) * f);
+      A.C[i] = 0;
+    }
+    A.grp.visible = true; A.chain.visible = true; A.fair.visible = true;
+    A.grp.position.copy(A.pos); A.grp.quaternion.copy(A.q);
+    for (let i = 0; i < A.pts.length; i++) A.wpts[i].copy(A.pts[i].l).applyQuaternion(A.q).add(A.pos);
+    _bPrev.copy(boatGroup.matrixWorld); boatGroup.getWorldQuaternion(_bqPrev); _boatPrevOk = true;
+    // sbuffo di comparsa
+    spawnSparks(A.pos.x, A.pos.y, -A.pos.z, 26, true);
+    AudioFX.playRim(0.5);
+  }
+
+  function resetAnchor() {
+    const A = anchor;
+    A.on = false; A.spawned = false; A.held = false; A.flying = false; A.hauling = false; A.sleep = false;
+    A.n = 0; A.hist.length = 0; _boatPrevOk = false;
+    if (A.grp) A.grp.visible = false;
+    if (A.chain) { A.chain.visible = false; A.chain.count = 0; }
+    if (A.fair) A.fair.visible = false;
+  }
+
+  /* ---------- un sotto-passo di fisica ---------- */
+  function ancStep(h) {
+    const A = anchor, S = ANC.SEG, X = A.X, P = A.P, n = A.n;
+    const wn = 1 / ANC.NODE_M;
+    const paying = A.held || A.flying;
+
+    // --- corpo: forze e previsione ---
+    if (!A.sleep) {
+      A.v0.copy(A.v); A.w0.copy(A.w);
+      const sub = Math.min(1, Math.max(0, (0.35 - A.pos.y) / 0.7));   // quanto è sott'acqua
+      A.v.y -= ANC.G * h * (1 - sub / 7.8);                           // ferro: spinta 1/7,8 del peso
+      if (sub > 0) {
+        A.v.multiplyScalar(Math.exp(-1.8 * sub * h));
+        A.w.multiplyScalar(Math.exp(-2.2 * sub * h));
+      }
+      A.pPrev.copy(A.pos); A.qPrev.copy(A.q);
+      A.pos.addScaledVector(A.v, h);
+      ancRot(A.q, A.w.x, A.w.y, A.w.z, h);
+      // presa del dito: molla morbida (XPBD) fra il punto preso e il dito
+      if (A.held) {
+        _ar.copy(A.grabL).applyQuaternion(A.q);
+        _av1.copy(A.pos).add(_ar).sub(A.target);
+        const C = _av1.length();
+        if (C > 1e-6) {
+          _an.copy(_av1).multiplyScalar(1 / C);
+          const k = ANC.M * Math.pow(2 * Math.PI * ANC.GRAB_HZ, 2);
+          const lam = C / (ancW(_ar, _an) + 1 / (k * h * h));
+          ancPosImp(_an.multiplyScalar(-lam), _ar);
+        }
+      }
+    }
+
+    // --- catena: previsione verlet ---
+    X[0] = P[0] = _aFair.x; X[1] = P[1] = _aFair.y; X[2] = P[2] = _aFair.z;
+    for (let i = 1; i < n; i++) {
+      const k = i * 3;
+      const wet = X[k + 1] < 0;
+      const damp = wet ? 0.94 : 0.998;
+      const vx = (X[k] - P[k]) * damp, vy = (X[k + 1] - P[k + 1]) * damp, vz = (X[k + 2] - P[k + 2]) * damp;
+      P[k] = X[k]; P[k + 1] = X[k + 1]; P[k + 2] = X[k + 2];
+      X[k] += vx; X[k + 1] += vy - ANC.G * (wet ? 0.87 : 1) * h * h; X[k + 2] += vz;
+    }
+
+    // --- vincoli della catena (solo trazione) + accoppiamento con l'anello ---
+    for (let it = 0; it < 2; it++) {
+      for (let i = 0; i < n - 1; i++) {
+        const a = i * 3, b = a + 3;
+        const dx = X[b] - X[a], dy = X[b + 1] - X[a + 1], dz = X[b + 2] - X[a + 2];
+        const d = Math.hypot(dx, dy, dz), rest = i === 0 ? A.firstLen : S;
+        if (d <= rest || d < 1e-9) continue;
+        const wa = i === 0 ? 0 : wn, c = (d - rest) / ((wa + wn) * d);
+        X[a] += dx * c * wa; X[a + 1] += dy * c * wa; X[a + 2] += dz * c * wa;
+        X[b] -= dx * c * wn; X[b + 1] -= dy * c * wn; X[b + 2] -= dz * c * wn;
+      }
+      // tirante: nessun tratto più lontano dalla cubia della catena che c'è in mezzo
+      for (let i = 2; i < n; i++) {
+        const k = i * 3, md = A.firstLen + (i - 1) * S;
+        const dx = X[k] - X[0], dy = X[k + 1] - X[1], dz = X[k + 2] - X[2];
+        const d = Math.hypot(dx, dy, dz);
+        if (d > md) { const f = md / d; X[k] = X[0] + dx * f; X[k + 1] = X[1] + dy * f; X[k + 2] = X[2] + dz * f; }
+      }
+      // ultimo tratto ↔ anello dell'ancora (nei due sensi)
+      ancRingWorld(_av2);
+      const k = (n - 1) * 3;
+      let dx = X[k] - _av2.x, dy = X[k + 1] - _av2.y, dz = X[k + 2] - _av2.z;
+      let d = Math.hypot(dx, dy, dz);
+      if (d > S + 0.01 && A.sleep) ancWake();
+      if (d > S && d > 1e-9) {
+        _an.set(dx / d, dy / d, dz / d);
+        _ar.copy(A.ring).applyQuaternion(A.q);
+        const wb = A.sleep ? 0 : ancW(_ar, _an);
+        const lam = (d - S) / (wn + wb);
+        X[k] -= _an.x * lam * wn; X[k + 1] -= _an.y * lam * wn; X[k + 2] -= _an.z * lam * wn;
+        if (!A.sleep) ancPosImp(_an.multiplyScalar(lam), _ar);
+      }
+      // tirante dell'ancora: non più lontana dalla cubia della catena filata
+      if (!paying) {
+        ancRingWorld(_av2);
+        dx = _av2.x - X[0]; dy = _av2.y - X[1]; dz = _av2.z - X[2];
+        d = Math.hypot(dx, dy, dz);
+        const tot = chainTotal();
+        if (d > tot + 0.01 && A.sleep) ancWake();
+        if (d > tot && !A.sleep) {
+          _an.set(-dx / d, -dy / d, -dz / d);
+          _ar.copy(A.ring).applyQuaternion(A.q);
+          // tirata dolce: mai più di ANC_PULL_MAX m/s di recupero per passo
+          // (incastrata contro lo scafo non deve schizzare via)
+          const c = Math.min(d - tot, ANC_PULL_MAX * h);
+          ancPosImp(_an.multiplyScalar(c / ancW(_ar, _an)), _ar);
+        }
+      }
+    }
+
+    // --- contatti della catena (barca semplificata, balena, granchio) ---
+    for (let i = 1; i < n; i++) {
+      const k = i * 3;
+      _av1.set(X[k], X[k + 1], X[k + 2]);
+      A.C[i] = 0;
+      if (ancEnv(_av1, ANC.NODE_R, true) > 0) {
+        const E = _env;
+        X[k] += E.nx * E.pen; X[k + 1] += E.ny * E.pen; X[k + 2] += E.nz * E.pen;
+        // attrito: via la velocità normale, metà di quella tangente
+        const vx = X[k] - P[k], vy = X[k + 1] - P[k + 1], vz = X[k + 2] - P[k + 2];
+        const vn = vx * E.nx + vy * E.ny + vz * E.nz;
+        const tx = vx - vn * E.nx, ty = vy - vn * E.ny, tz = vz - vn * E.nz;
+        P[k] = X[k] - tx * 0.5; P[k + 1] = X[k + 1] - ty * 0.5; P[k + 2] = X[k + 2] - tz * 0.5;
+        A.C[i] = E.boat ? 1 : 2;
+      }
+    }
+
+    if (A.sleep) return;
+
+    // --- contatti del corpo: punti campione ---
+    let nc = 0;
+    A.boatContact = false; A.whaleContact = false;
+    for (const pt of A.pts) {
+      _ar.copy(pt.l).applyQuaternion(A.q);
+      _av1.copy(A.pos).add(_ar);
+      if (ancEnv(_av1, pt.r, false) <= 0) continue;
+      const E = _env;
+      _an.set(E.nx, E.ny, E.nz);
+      const c = _contacts[nc++];
+      c.r.copy(_ar); c.n.copy(_an);
+      // velocità normale prima del passo (per il rimbalzo)
+      _av2.crossVectors(A.w0, _ar).add(A.v0);
+      c.vnPre = _av2.dot(_an);
+      c.mu = E.whale ? ANC.MU_SKIN : ANC.MU_BOAT;
+      c.lam = E.pen / ancW(_ar, _an);
+      ancPosImp(_av2.copy(_an).multiplyScalar(c.lam), _ar);
+      if (E.boat) A.boatContact = true; else A.whaleContact = true;
+      if (nc >= _contacts.length) break;
+    }
+
+    // --- velocità dalle posizioni ---
+    A.v.copy(A.pos).sub(A.pPrev).multiplyScalar(1 / h);
+    _aq.copy(A.qPrev).invert().premultiply(A.q);       // dq = q · qPrev⁻¹
+    const sg = _aq.w < 0 ? -2 / h : 2 / h;
+    A.w.set(_aq.x * sg, _aq.y * sg, _aq.z * sg);
+
+    // --- passo di velocità: attrito e rimbalzo ---
+    for (let i = 0; i < nc; i++) {
+      const c = _contacts[i];
+      _av1.crossVectors(A.w, c.r).add(A.v);
+      const vn = _av1.dot(c.n);
+      _av2.copy(_av1).addScaledVector(c.n, -vn);           // tangente
+      const vt = _av2.length();
+      if (vt > 1e-5) {
+        _av2.multiplyScalar(1 / vt);
+        const wt = ancW(c.r, _av2);
+        const J = Math.min(c.mu * c.lam / h, vt / wt);
+        ancVelImp(_av2.multiplyScalar(-J), c.r);
+      }
+      _av1.crossVectors(A.w, c.r).add(A.v);
+      const vn2 = _av1.dot(c.n);
+      const e = -c.vnPre > 2 * ANC.G * h ? ANC.E : 0;
+      const want = Math.max(-e * c.vnPre, 0);
+      if (vn2 < want) ancVelImp(_av2.copy(c.n).multiplyScalar((want - vn2) / ancW(c.r, c.n)), c.r);
+      if (-c.vnPre > A.impact) A.impact = -c.vnPre;
+    }
+
+    // --- smorzamenti e limiti ---
+    if (A.held) { A.v.multiplyScalar(Math.exp(-2.5 * h)); A.w.multiplyScalar(Math.exp(-3.5 * h)); }
+    else if (A.hauling) { A.v.multiplyScalar(Math.exp(-1.2 * h)); A.w.multiplyScalar(Math.exp(-1.5 * h)); }
+    else { A.w.multiplyScalar(Math.exp(-0.15 * h)); }
+    if (A.v.lengthSq() > 1600) A.v.setLength(40);
+    if (A.w.lengthSq() > 625) A.w.setLength(25);
+    // atterrata (non il ponte da cui è appena partita)
+    if (nc > 0 && A.flying && A.flyT > 0.2) A.flying = false;
+
+    // --- riposo: ferma e appoggiata (non sulla balena, non in acqua) ---
+    if (!A.held && nc >= 2 && !A.whaleContact && A.pos.y > 0.2 &&
+        A.v.lengthSq() < 0.004 && A.w.lengthSq() < 0.015) {
+      A.still += h;
+      if (A.still > 0.6) { A.sleep = true; A.v.set(0, 0, 0); A.w.set(0, 0, 0); }
+    } else A.still = 0;
+  }
+
+  /* ---------- per frame ---------- */
+  const _lM = new T.Matrix4(), _lX = new T.Vector3(), _lY = new T.Vector3(), _lZ = new T.Vector3();
+  const _lSide = new T.Vector3(), _lPos = new T.Vector3();
+  function updateAnchor(dt) {
+    const A = anchor;
+    if (!A.on) {
+      if (finale.active && finale.t >= ANC.SPAWN_T && boatGroup && boatWall && !A.spawned) {
+        A.spawned = true;
+        spawnAnchor();
+      }
+      return;
+    }
+    dt = Math.min(dt, 1 / 30);
+    if (!(dt > 0)) return;
+
+    // riferimento della barca (naviga col timone, sbanda, affonda coi danni)
+    boatGroup.updateMatrixWorld(true);
+    _bM.copy(boatGroup.matrixWorld);
+    boatGroup.getWorldQuaternion(_bq);
+    if (_boatPrevOk) {
+      // ciò che è appoggiato alla barca viaggia con lei
+      _bD.copy(_bPrev).invert().premultiply(_bM);
+      _bqD.copy(_bqPrev).invert().premultiply(_bq);
+      if (A.boatContact || (A.sleep && !A.whaleContact)) {
+        A.pos.applyMatrix4(_bD); A.q.premultiply(_bqD).normalize();
+        A.pPrev.applyMatrix4(_bD); A.qPrev.premultiply(_bqD).normalize();
+      }
+      for (let i = 1; i < A.n; i++) {
+        if (A.C[i] !== 1) continue;
+        const k = i * 3;
+        _av1.set(A.X[k], A.X[k + 1], A.X[k + 2]).applyMatrix4(_bD);
+        _av2.set(A.P[k], A.P[k + 1], A.P[k + 2]).applyMatrix4(_bD);
+        A.X[k] = _av1.x; A.X[k + 1] = _av1.y; A.X[k + 2] = _av1.z;
+        A.P[k] = _av2.x; A.P[k + 1] = _av2.y; A.P[k + 2] = _av2.z;
+      }
+    }
+    _bPrev.copy(_bM); _bqPrev.copy(_bq); _boatPrevOk = true;
+    _bInv.copy(_bM).invert();
+    _aFair.copy(ANC_FAIR_L).applyMatrix4(_bM);
+
+    // il cannone si prende il dito: l'ancora cade dove sta
+    if (A.held && (game.cannonMode || cannonCtl.phase !== "off")) { A.held = false; A.hist.length = 0; }
+    if (A.flying) { A.flyT += dt; if (A.flyT > 6 || A.pos.y < -0.1) A.flying = false; }
+
+    // catena: fila (presa o in volo) / verricello (in mare o troppo lasca)
+    ancRingWorld(_av2);
+    const dist = _aFair.distanceTo(_av2), tot = chainTotal();
+    if (A.held || A.flying) {
+      A.hauling = false;
+      // lasco abbondante: la catena che vola dietro non frena il lancio
+      const need = dist * 1.12 + 0.4;
+      if (tot < need) chainGrow(need - tot);
+    } else {
+      if (A.pos.y < -0.25) A.hauling = true;
+      if (A.hauling) {
+        ancWake();
+        // il verricello avvolge solo se la catena segue: tesa contro lo scafo si ferma
+        if (tot > dist - 0.15) chainHaul(ANC.HAUL_WET * dt);
+        if (chainTotal() <= 0.31) A.hauling = false;
+      } else if (tot > dist + ANC.SLACK) {
+        chainHaul(Math.min(ANC.HAUL_SLACK * dt, tot - dist - ANC.SLACK));
+      }
+    }
+
+    A.impact = 0;
+    const h = dt / ANC.SUB;
+    for (let s = 0; s < ANC.SUB; s++) ancStep(h);
+
+    // tonfi sul legno / tonfo in acqua
+    A.sndCD = Math.max(0, A.sndCD - dt);
+    if (A.impact > 1.0 && A.sndCD <= 0) {
+      AudioFX.playBoard(Math.min(1, A.impact / 6) * 0.9);
+      game.shake = Math.max(game.shake, Math.min(0.35, A.impact * 0.045));
+      A.sndCD = 0.12;
+    }
+    if (A.prevY >= 0 && A.pos.y < 0 && A.v.y < -1) {
+      spawnSparks(A.pos.x, 0.05, -A.pos.z, 30, true);
+      game.shake = Math.max(game.shake, 0.15);
+    }
+    A.prevY = A.pos.y;
+
+    // modello
+    A.grp.position.copy(A.pos);
+    A.grp.quaternion.copy(A.q);
+    for (let i = 0; i < A.pts.length; i++) A.wpts[i].copy(A.pts[i].l).applyQuaternion(A.q).add(A.pos);
+
+    // maglie lungo la catena, dall'anello alla cubia, a passo fisso
+    drawAnchorChain();
+  }
+
+  function drawAnchorChain() {
+    const A = anchor, X = A.X, Pp = ANC.LINK_P;
+    ancRingWorld(_av2);
+    // polilinea: anello, nodo n-1, ..., nodo 0 (cubia)
+    let px = _av2.x, py = _av2.y, pz = _av2.z;
+    let idx = A.n - 1, acc = 0, sNext = Pp * 0.5, count = 0;
+    _lSide.set(1, 0, 0).applyQuaternion(A.q);           // prima maglia: piano delle marre
+    while (idx >= 0 && count < A.maxLinks) {
+      const k = idx * 3, qx = X[k], qy = X[k + 1], qz = X[k + 2];
+      const sx = qx - px, sy = qy - py, sz = qz - pz, L = Math.hypot(sx, sy, sz);
+      if (L < 1e-6) { idx--; continue; }
+      while (sNext <= acc + L && count < A.maxLinks) {
+        const f = (sNext - acc) / L;
+        _lPos.set(px + sx * f, py + sy * f, pz + sz * f);
+        _lY.set(sx / L, sy / L, sz / L);                  // asse lungo della maglia
+        // trasporto parallelo del lato: niente torsioni a scatti
+        _lSide.addScaledVector(_lY, -_lSide.dot(_lY));
+        if (_lSide.lengthSq() < 1e-6) _lSide.set(_lY.y, -_lY.x, 0).add(_av1.set(0, _lY.z, -_lY.y));
+        _lSide.normalize();
+        if (count & 1) _lX.crossVectors(_lY, _lSide); else _lX.copy(_lSide);   // maglie alterne a 90°
+        _lZ.crossVectors(_lX, _lY);
+        _lM.makeBasis(_lX, _lY, _lZ).setPosition(_lPos);
+        A.chain.setMatrixAt(count++, _lM);
+        sNext += Pp;
+      }
+      acc += L; px = qx; py = qy; pz = qz; idx--;
+    }
+    A.chain.count = count;
+    A.chain.instanceMatrix.needsUpdate = true;
+  }
+
+  /* ---------- presa col dito ---------- */
+  const _gNdc = new T.Vector2(), _gO = new T.Vector3(), _gD = new T.Vector3();
+  function ancPointerRay(p) {
+    _gNdc.set((p.x / window.innerWidth) * 2 - 1, -(p.y / window.innerHeight) * 2 + 1);
+    camera.updateMatrixWorld();
+    _ray.setFromCamera(_gNdc, camera);
+    return _ray;
+  }
+  function anchorGrabDown(p) {
+    const A = anchor;
+    if (!A.on || !world.visible || game.cannonMode || cannonCtl.phase !== "off") return false;
+    const ray = ancPointerRay(p);
+    A.grp.updateMatrixWorld(true);
+    const hits = ray.intersectObject(A.mesh, false);
+    let hit = null;
+    if (hits.length) hit = _av1.copy(hits[0].point);
+    else {
+      // vicino a un punto dell'ancora sullo schermo (un dito, 44 px)
+      const W = window.innerWidth, H = window.innerHeight;
+      let best = 44 * 44;
+      for (const wp of A.wpts) {
+        _av2.copy(wp).project(camera);
+        if (_av2.z >= 1) continue;
+        const sx = (_av2.x * 0.5 + 0.5) * W, sy = (-_av2.y * 0.5 + 0.5) * H;
+        const d2 = (sx - p.x) * (sx - p.x) + (sy - p.y) * (sy - p.y);
+        if (d2 < best) { best = d2; hit = _av1.copy(wp); }
+      }
+    }
+    if (!hit) return false;
+    ancWake();
+    A.held = true; A.flying = false; A.hauling = false;
+    _aqi.copy(A.q).invert();
+    A.grabL.copy(hit).sub(A.pos).applyQuaternion(_aqi);
+    camera.getWorldDirection(A.planeN);
+    A.planeD = A.planeN.dot(hit);
+    A.target.copy(hit);
+    A.hist.length = 0;
+    A.hist.push({ t: performance.now(), x: hit.x, y: hit.y, z: hit.z });
+    return true;
+  }
+  function anchorGrabMove(p) {
+    const A = anchor;
+    if (!A.held) return;
+    const ray = ancPointerRay(p);
+    _gO.copy(ray.ray.origin); _gD.copy(ray.ray.direction);
+    const den = A.planeN.dot(_gD);
+    if (Math.abs(den) < 1e-4) return;
+    const t = (A.planeD - A.planeN.dot(_gO)) / den;
+    if (t < 0.2 || t > 45) return;
+    A.target.copy(_gO).addScaledVector(_gD, t);
+    const now = performance.now();
+    A.hist.push({ t: now, x: A.target.x, y: A.target.y, z: A.target.z });
+    while (A.hist.length > 2 && now - A.hist[0].t > 100) A.hist.shift();
+  }
+  function anchorGrabUp() {
+    const A = anchor;
+    if (!A.held) return;
+    A.held = false;
+    const h = A.hist, now = performance.now();
+    const a = h[0], b = h[h.length - 1];
+    const span = h.length > 1 ? (b.t - a.t) / 1000 : 0;
+    // lancio: velocità del dito (ultimi 0,1 s), se si stava muovendo
+    if (span > 0.02 && now - b.t < 70) {
+      _av1.set((b.x - a.x) / span, (b.y - a.y) / span, (b.z - a.z) / span).multiplyScalar(ANC.THROW_K);
+      camera.getWorldDirection(_av2);
+      _av2.y = 0;
+      if (_av2.lengthSq() > 1e-6) {
+        _av2.normalize();
+        _av1.addScaledVector(_av2, Math.max(0, _av1.y) * ANC.THROW_FWD);
+      }
+      if (_av1.lengthSq() > ANC.THROW_MAX * ANC.THROW_MAX) _av1.setLength(ANC.THROW_MAX);
+      A.v.copy(_av1);
+    }
+    if (A.v.length() > 3) { A.flying = true; A.flyT = 0; }
+    h.length = 0;
+  }
+  function anchorHeld() { return anchor.held; }
+
+  /* ---------- la palla rimbalza sull'ancora ---------- */
+  function collideBallAnchor() {
+    const A = anchor;
+    if (!A.on) return;
+    for (let i = 0; i < A.wpts.length; i++) {
+      const w = A.wpts[i];
+      bounceSphere(w.x, w.y, -w.z, A.pts[i].r + 0.015, 0.45);
+    }
+  }
+  /* =========================================================
      REGIA & CHIUSURA DEL LIVELLO
      ---------------------------------------------------------
      Coda del modulo boatLevel: reset dello stato (resetFinale), il
@@ -36365,7 +37415,7 @@ const boatLevel = (function () {
     resetMinePickup();
     // contrattacco del Kraken: barca di nuovo integra
     finale.boatHits = 0; finale.sinking = false;
-    finale.whaleLoop = 0; finale.attackPending = false; finale.whaleBack = 0;
+    finale.whaleLoop = 0; finale.attackPending = false; finale.whalePause = 0;
     finale.tNow = 0; finale.attackHoldUntil = 0; finale.attackDisabled = false;
     boatAttack.phase = "idle"; boatAttack.t = 0; boatAttack.hit = false;
     hideAttackTentacle();              // braccio d'attacco di nuovo sott'acqua
@@ -36390,6 +37440,7 @@ const boatLevel = (function () {
       krakenUI.flashMesh.material.opacity = 0;
       drawKrakenBar();
     }
+    resetAnchor();                     // ancora e catena: via, ricompaiono alla prossima boss fight
     clearKrakenDamage();               // ferite, monconi ed emolinfa: via tutto
     clearKrakenDeath();                // pezzi dell'esplosione + reward: via tutto
     if (giantOcto) { giantOcto.visible = false; giantOcto.scale.set(1, 1, 1); giantOcto.position.set(GIANT_X, -8, GIANT_Z3); }
@@ -36480,6 +37531,8 @@ const boatLevel = (function () {
   }
 
   function grabDown(p) {
+    // l'ANCORA della boss fight (15e2) ha la precedenza sul timone
+    if (anchorGrabDown(p)) return true;
     if (!helmWheel || !world.visible || cannonCtl.phase !== "off" || game.cannonMode) return false;
     const c = helmScreen();
     if (!c.front || Math.hypot(p.x - c.x, p.y - c.y) > Math.max(HELM.GRAB_PX, c.r * HELM.GRAB_K)) return false;
@@ -36489,6 +37542,7 @@ const boatLevel = (function () {
     return true;
   }
   function grabMove(p) {
+    if (anchorHeld()) { anchorGrabMove(p); return; }
     if (!sail.held) return;
     const c = helmScreen();
     const a = angAt(c, p);
@@ -36500,6 +37554,7 @@ const boatLevel = (function () {
     wheelHist();
   }
   function grabUp() {
+    if (anchorHeld()) { anchorGrabUp(); return; }
     if (!sail.held) return;
     sail.held = false;
     wheelHist();
@@ -36571,12 +37626,12 @@ const boatLevel = (function () {
       // boss fight: la balena nuota avanti/indietro (bossWhalePos). NON è più
       // ferma: si allontana e si riavvicina, e il tentacolo frontale spawna solo
       // quando è al punto più lontano (vedi il trigger in updateFinale).
-      const bw = bossWhalePos(t);
+      // tentacolo d'attacco fuori (emersione → rientro in acqua): la balena sta
+      // FERMA dov'è, il suo orologio di nuoto non avanza; poi riparte da lì
+      if (boatAttack.phase !== "idle") finale.whalePause += dt;
+      const bw = bossWhalePos(bossWhaleT(t));
       wx = bw.x;
-      // tentacolo frontale fuori: la balena arretra quanto basta per restarne staccata
-      const need = boatAttack.phase !== "idle" ? Math.max(0, BOSS_WHALE_ARM_CLEAR - bw.z) : 0;
-      finale.whaleBack += (need - finale.whaleBack) * (1 - Math.exp(-6 * dt));
-      wz = bw.z + finale.whaleBack;
+      wz = bw.z;
     } else {
       const wp = whalePathAt(t);
       wx = wp.x;
@@ -36635,6 +37690,9 @@ const boatLevel = (function () {
 
     // ---- barca danneggiata: scivola verso la posa (sbandamento/affondamento) ----
     updateBoatDamage(dt);
+
+    // ---- ancora con catena della boss fight (dopo la barca: ne segue la posa) ----
+    updateAnchor(dt);
   }
 
   /* =========================================================
@@ -36754,7 +37812,8 @@ const boatLevel = (function () {
     // zoom della visuale ridotto del 15% (viewFov, 04-scene): campo più largo
     viewZoom: 0.85,
     // movimento: niente binario, la BARCA si guida col TIMONE (navigazione, sopra), anche nella boss fight
-    grabDown, grabMove, grabUp, grabHeld: () => sail.held,
+    // + l'ANCORA della boss fight, che si afferra e si lancia col dito (15e2)
+    grabDown, grabMove, grabUp, grabHeld: () => sail.held || anchorHeld(),
     // potenziamenti volanti (10b): restano anche nella boss fight del Kraken;
     // si ritirano solo a Kraken morto (esplosione + premio: mazzafionda)
     powerupsBlocked: () => finale.active && finale.krakenHP <= 0,
@@ -62949,9 +64008,11 @@ const hubLevel = (function () {
     for (const r of HubRift.RIFTS) HubRift.setWon(r.id, completedLevels.has(r.id));
   }
 
-  // giocatore fuori dal binario (appena entrato, slot caricato, menù chiuso): ci torna di colpo
+  // giocatore fuori dal binario (appena entrato, slot caricato, menù chiuso): ci torna di colpo.
+  // Già dal primo frame della dissolvenza del menù (ancora opaco): se aspettasse la
+  // chiusura vera, la visuale salterebbe di 2 m indietro a menù appena sparito.
   function keepOnRail() {
-    if (game.menuOpen || level.transitioning || FloorMove.walking()) return;
+    if ((game.menuOpen && !MainMenu.isClosing()) || level.transitioning || FloorMove.walking()) return;
     // fuori dal binario (o a casa, postazione spenta) → il punto di partenza: di fronte al canestro
     const cx = playerSpot.on ? playerSpot.x : 0, cz = playerSpot.on ? playerSpot.z : 0;
     const cyaw = playerSpot.on ? playerSpot.yaw : 0;
