@@ -1,5 +1,5 @@
 /* generato da tools/build.mjs */
-const CACHE = "basketverse-vmwmbnnpc";
+const CACHE = "basketverse-vmwme705r";
 const ASSETS = [
   "./index.html",
   "./vendor/three.min.js",

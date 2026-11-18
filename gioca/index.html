@@ -937,7 +937,10 @@
      mazzafionda 3D (canvas creato da 15e-boat-kraken.js in
      .ir-stage), alone caldo pulsante e scritte in sovrimpressione:
      riga d'oro spaziata + titolo grande color legno-ambra con
-     riflesso che scorre e bagliore arancio.
+     riflesso che scorre e bagliore arancio. Lettere a GRAZIE
+     (Georgia su PC, Noto Serif su Android: font di sistema, niente
+     download) con spessore vero: uno strato .ir-depth dietro fa da
+     fianco estruso in legno scuro, .ir-face davanti è la faccia.
      ========================================================= */
   #itemreward {
     --ir-s: min(54vh, 68vw, 560px);              /* lato della vetrina 3D */
@@ -986,57 +989,75 @@
   #itemreward .ir-text {
     margin-top: clamp(2px, 1.4vh, 14px);
     text-align: center;
-    font-family: "Segoe UI", system-ui, Arial, sans-serif;
+    font-family: Georgia, "Noto Serif", "Droid Serif", Cambria, "Times New Roman", serif;
+    font-kerning: normal;
+    text-rendering: geometricPrecision;
   }
-  /* riga d'oro spaziata, tra due filetti */
+  /* riga d'oro in maiuscolo a grazie, spaziata, tra due filetti */
   #itemreward .ir-kicker {
     display: flex; align-items: center; justify-content: center;
-    gap: clamp(8px, 1.6vw, 16px);
-    font-size: clamp(12px, min(2.4vw, 3.6vh), 22px); font-weight: 800;
-    letter-spacing: .34em;
-    color: #f6dd95;
-    text-shadow: 0 0 14px rgba(255, 206, 92, 0.55), 0 2px 0 rgba(0, 0, 0, 0.6);
-    opacity: 0; transform: translateY(16px);
-    transition: opacity .5s ease .45s, transform .6s cubic-bezier(.2, .85, .3, 1.1) .45s;
+    gap: clamp(8px, 1.4vw, 14px);
+    font-size: clamp(11px, min(2.1vw, 3.2vh), 19px); font-weight: 700;
+    letter-spacing: .3em;
+    color: #f3d892;
+    text-shadow: 0 1px 0 rgba(58, 32, 12, 0.9), 0 0 12px rgba(255, 200, 96, 0.35);
+    opacity: 0; transform: translateY(12px);
+    transition: opacity .5s ease .45s, transform .6s cubic-bezier(.2, .85, .3, 1.05) .45s;
   }
-  #itemreward .ir-kicker span { padding-left: .34em; }   /* bilancia lo spazio dopo l'ultima lettera */
+  #itemreward .ir-kicker span { padding-left: .3em; }   /* bilancia lo spazio dopo l'ultima lettera */
   #itemreward .ir-kicker::before,
   #itemreward .ir-kicker::after {
-    content: ""; height: 2px; width: clamp(26px, 8vw, 90px);
-    background: linear-gradient(90deg, rgba(246, 221, 149, 0), #f6dd95);
-    box-shadow: 0 0 8px rgba(255, 206, 92, 0.6);
+    content: ""; height: 1px; width: clamp(28px, 8vw, 92px);
+    background: linear-gradient(90deg, rgba(243, 216, 146, 0), rgba(243, 216, 146, 0.95));
+    box-shadow: 0 0 6px rgba(255, 200, 96, 0.45);
   }
   #itemreward .ir-kicker::after { transform: scaleX(-1); }
   #itemreward.on .ir-kicker { opacity: 1; transform: translateY(0); }
 
-  /* titolo legno-ambra: sfumatura dal miele chiaro al legno scuro, bordo
-     inciso, bagliore arancio */
+  /* titolo: faccia legno-ambra (stessi colori di prima) sopra un fianco
+     estruso a strati, come una lettera intagliata vera */
   #itemreward .ir-title {
     position: relative; display: inline-block;
-    margin-top: clamp(2px, .8vh, 8px);
-    font-size: clamp(34px, min(9.5vw, 13vh), 104px); font-weight: 900; line-height: 1.05;
-    letter-spacing: .03em;
+    margin-top: clamp(4px, 1vh, 10px);
+    font-size: clamp(32px, min(9vw, 12.5vh), 98px); font-weight: 700; line-height: 1.08;
+    letter-spacing: .045em;
+    padding: 0 .06em .14em;          /* spazio per il fianco e l'ombra sotto */
+    opacity: 0; transform: translateY(10px) scale(1.16);
+    transition: opacity .45s ease .7s, transform .75s cubic-bezier(.18, .9, .25, 1.08) .7s;
+  }
+  #itemreward.on .ir-title { opacity: 1; transform: none; }
+  #itemreward .ir-depth,
+  #itemreward .ir-face { display: block; white-space: nowrap; }
+  /* fianco: copia della scritta in legno scuro, impilata verso il basso */
+  #itemreward .ir-depth {
+    position: absolute; left: .06em; top: 0;
+    color: #8a4c1d;
+    text-shadow:
+      0 .010em 0 #82471b, 0 .020em 0 #784118, 0 .030em 0 #6c3a15,
+      0 .040em 0 #603312, 0 .050em 0 #542c0f, 0 .060em 0 #46240c,
+      0 .075em .02em rgba(0, 0, 0, 0.55),
+      0 .14em .16em rgba(0, 0, 0, 0.5),
+      0 0 .32em rgba(255, 150, 50, 0.38);
+  }
+  /* faccia: sfumatura miele → legno, bordo sottile inciso */
+  #itemreward .ir-face {
+    position: relative;
     color: transparent;
     background: linear-gradient(180deg, #fff7df 0%, #ffd58a 34%, #d9893a 52%, #a85a22 60%, #f0b468 100%);
     -webkit-background-clip: text; background-clip: text;
-    -webkit-text-stroke: 1px rgba(74, 40, 14, 0.6);
-    filter: drop-shadow(0 3px 0 #3a2210) drop-shadow(0 7px 0 rgba(0, 0, 0, 0.35))
-            drop-shadow(0 0 26px rgba(255, 150, 50, 0.45));
-    opacity: 0; transform: scale(1.5);
-    transition: opacity .45s ease .7s, transform .7s cubic-bezier(.2, .9, .25, 1.15) .7s,
-                letter-spacing .7s cubic-bezier(.2, .9, .25, 1) .7s;
+    -webkit-text-stroke: .012em rgba(74, 40, 14, 0.55);
   }
-  #itemreward:not(.on) .ir-title { letter-spacing: .22em; }
-  #itemreward.on .ir-title { opacity: 1; transform: scale(1); }
   /* riflesso di luce che scorre sulle lettere */
   #itemreward .ir-title::after {
     content: attr(data-text);
-    position: absolute; inset: 0;
+    position: absolute; left: .06em; top: 0;
+    white-space: nowrap;
     color: transparent; -webkit-text-stroke: 0;
     background: linear-gradient(105deg, rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0.9) 50%, rgba(255, 255, 255, 0) 58%);
     background-size: 260% 100%; background-position: 160% 0;
     -webkit-background-clip: text; background-clip: text;
     animation: irShine 2.6s ease-in-out 1.4s infinite;
+    pointer-events: none;
   }
   @keyframes irShine { 0% { background-position: 160% 0; } 55%, 100% { background-position: -60% 0; } }
 
@@ -1661,7 +1682,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwmbnnln";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwme702v";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -1751,7 +1772,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
   <div class="ir-stage"><div class="ir-rays"></div><div class="ir-halo"></div></div>
   <div class="ir-text">
     <div class="ir-kicker"><span>NEW ITEM UNLOCKED,</span></div>
-    <div class="ir-title" data-text="SLINGSHOT!">SLINGSHOT!</div>
+    <div class="ir-title" data-text="SLINGSHOT!"><span class="ir-depth" aria-hidden="true">SLINGSHOT!</span><span class="ir-face">SLINGSHOT!</span></div>
   </div>
 </div>
 
@@ -2430,7 +2451,9 @@ function returnStolenShot() {
 }
 
 /* ============================================================
-   STATISTICHE DEL TIRO — potenza, gittata, arco, tocco, precisione
+   STATISTICHE DEL TIRO — potenza, gittata, arco, tocco, oscillazione
+   (PRECISIONE eliminata il 2026-11-18: la linea di mira non è più una stat,
+   compare SOLO col potenziamento volante MIRA GUIDATA, vedi 10-physics)
    ------------------------------------------------------------
    Valori VERI che pilotano tiro e fisica (non numeri decorativi),
    ricavati dalla dinamica reale di un tiro di basket. Ogni statistica
@@ -2460,7 +2483,6 @@ game.stats = {
   gittata:      { base: 0, bonus: 0 },
   arco:         { base: 0, bonus: 0 },
   tocco:        { base: 0, bonus: 0 },
-  precisione:   { base: 0, bonus: 0 },
   oscillazione: { base: 0, bonus: 0 },
 };
 
@@ -2470,7 +2492,6 @@ const STAT_INFO = {
   gittata:      { abbr: "RNG", col: "#c9a0ff" },
   arco:         { abbr: "ARC", col: "#ffd24a" },
   tocco:        { abbr: "TCH", col: "#7bd88f" },
-  precisione:   { abbr: "PRC", col: "#59d9ff" },
   oscillazione: { abbr: "OSC", col: "#ff5fa2" },
 };
 
@@ -2515,16 +2536,6 @@ const Stats = {
   //   sul ferro rotolano dentro) e più giri di rilascio (~+20% margine reale).
   rimSoft()   { return 1 - statT("tocco") * 0.28; },             // 1.0 (lv0) … 0.72 (lv5)
   spinBoost() { return 1 + statT("tocco") * 0.5;  },             // backspin di rilascio ×1.0 … ×1.5
-
-  // PRECISIONE → SOLO aiuti, nessuna casualità: allunga la LINEA DI MIRA
-  //   tratteggiata (updateAimHelpers, 10-physics). È la FRAZIONE del volo vero
-  //   che la linea mostra, misurata sulla lunghezza dell'arco: 40% (lv0) … 85%
-  //   (lv5). La MIRA GUIDATA (potenziamento a tempo) la porta al 100%: tutto il
-  //   volo fino al punto d'arrivo, col mirino su dove finisce la palla.
-  aimReach() { return 0.40 + statT("precisione") * 0.45; },
-  //   Numero di TRATTINI della linea (tiro normale e campana): 3 a lv0, +1 a ogni
-  //   livello comprato (8 a lv5). La MIRA GUIDATA disegna invece la linea intera.
-  aimDashes() { return 3 + statLevel("precisione"); },
 
   // OSCILLAZIONE → stabilità delle mani: scala l'ampiezza dell'ondeggio "handheld"
   //   della visuale mentre si tiene/prepara il tiro (12-loop). Le mani più ferme
@@ -17665,9 +17676,9 @@ reticle.renderOrder = 5;
 scene.add(reticle);
 
 /* LINEA DI MIRA TRATTEGGIATA (InstancedMesh di bastoncini azzurri) = il tiro
-   NORMALE che parte rilasciando ADESSO. Col tiro a parabola armato non c'è linea.
-   Trattini: 3 + livello PRECISIONE sparsi sull'arco; con la MIRA GUIDATA linea
-   intera a passo costante che scorre piano verso il bersaglio.
+   NORMALE che parte rilasciando ADESSO. Compare SOLO con la MIRA GUIDATA: linea
+   intera a passo costante che scorre piano verso il bersaglio. Col tiro a
+   parabola armato non c'è linea.
    Il colore per-istanza fa da opacità (blending additivo): la coda sfuma.
    `aimDots` resta il nome del gruppo (lo usano menù e livelli per la visibilità). */
 const AIM_DASH_N = 140;          // trattini al massimo per linea (spazio a gravità bassa: archi lunghi)
@@ -19895,6 +19906,13 @@ if (devMedievalEl) devMedievalEl.addEventListener("click", (e) => {
   if (level.transitioning || !medieval || level.current === medieval) return;
   runTransition(() => switchLevel(medieval), "MEDIOEVO");
 });
+/* DEV 🏹: fa comparire l'anello volante della MIRA GUIDATA (10b-powerups.js). */
+const devAimGuideEl = document.getElementById("devjump-aimguide");
+if (devAimGuideEl) devAimGuideEl.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (level.transitioning || typeof devSpawnAimGuide !== "function") return;
+  devSpawnAimGuide();
+});
 const devPointsEl = document.getElementById("devjump-points");
 if (devPointsEl) devPointsEl.addEventListener("click", (e) => {
   e.stopPropagation();
@@ -20422,6 +20440,9 @@ function pointerPos(e) {
   return { x: t.clientX, y: t.clientY };
 }
 
+// un comando del livello (timone) è tenuto dal dito
+function grabbing() { return !!(level.current && level.current.grabHeld && level.current.grabHeld()); }
+
 function onDown(e) {
   if (game.menuOpen || game.statsOpen || game.gameOver) return;
   // FUMETTI DI DIALOGO: un tocco sul fumetto lo salta (05p), anche in cutscene
@@ -20448,6 +20469,12 @@ function onDown(e) {
     e.preventDefault();
     return;
   }
+
+  // PRESA DI UN COMANDO DEL LIVELLO (il TIMONE della barca nel mare, 15f): il dito
+  // che lo tocca lo afferra e lo gira; niente tiro né visuale finché non si lascia
+  if (level.active && level.current && level.current.grabDown &&
+      !(e.target instanceof Element && e.target.closest("button")) &&
+      level.current.grabDown(pointerPos(e))) { e.preventDefault(); return; }
 
   // MINIGUN imbracciata: niente tiro della palla. Tenendo premuto SULLE MANI le
   // canne iniziano a girare e dopo 2 s parte la raffica (08f). I pulsanti HUD
@@ -20534,6 +20561,8 @@ function tapForNextShot() {
 function onMove(e) {
   if (isGhostMouse(e)) return;
   if (game.invOpen) { e.preventDefault(); return; }   // primo piano schermo: input congelato
+  // TIMONE afferrato (15f): il trascinamento lo gira
+  if (grabbing()) { level.current.grabMove(pointerPos(e)); e.preventDefault(); return; }
   // MINIGUN: col dito ancora premuto la canna segue il trascinamento
   if (minigunHeld()) { minigunMove(pointerPos(e)); e.preventDefault(); return; }
   // MODALITÀ CANNONE: il trascinamento sposta la mira del cannone
@@ -20658,6 +20687,8 @@ function onUp(e) {
   if (isGhostMouse(e)) return;
   FloorMove.noteUp(e);                  // primo tocco del doppio clic: era secco?
   if (game.invOpen) { e.preventDefault(); return; }   // primo piano schermo: input congelato
+  // TIMONE lasciato (15f): continua a girare con la spinta del gesto
+  if (grabbing()) { level.current.grabUp(pointerPos(e)); e.preventDefault(); return; }
   // MINIGUN: rilasciando le mani il fuoco cessa e le canne rallentano
   if (minigunHeld()) { minigunRelease(); e.preventDefault(); return; }
   // MODALITÀ CANNONE: rilascio = spara (se è stato un tocco secco)
@@ -21284,31 +21315,37 @@ function mobileCamUpdate(dt) {
   game.aimZoom += ((aiming ? 1 : 0) - game.aimZoom) * zk;
 }
 /* ============================================================
-   SPOSTAMENTO A DOPPIO CLIC — doppio clic sul pavimento (doppio tap su
-   telefono) e il giocatore cammina fin lì.
+   SPOSTAMENTO SUL BINARIO — STANDARD DI OGNI LIVELLO (2026-11-18): è il
+   movimento della palestra (hub) usato ovunque. Doppio clic sul pavimento
+   (doppio tap su telefono) e il giocatore scivola lungo il BINARIO del
+   livello fino al punto più vicino: tocchi il lato sinistro dello schermo e
+   va a sinistra, il destro e va a destra.
 
+   - Il binario è un segmento (m.walkRail: { ax, az, bx, bz, face, project }).
+     I livelli lo creano con FloorMove.rail(x0, x1, z, face): laterale
+     (lungo x) alla quota z (di solito la postazione di partenza, z = 0),
+     mai più lungo dello standard ±RAIL_HALF (7,5 m, come la palestra).
+     L'hub ha il suo (21-level-hub.js: 2 m più indietro, girato sul
+     canestro dell'hub).
+   - face = il punto che si guarda camminando; null = il canestro del
+     livello se è in scena, altrimenti la visuale resta dov'era (negozio,
+     covo, garage: canestro parcheggiato).
    - Il punto si trova con un raggio dalla camera sul pavimento vero del
-     livello (groundInfo: medioevo in salita compreso).
+     livello (groundInfo: medioevo in salita compreso); dove sotto c'è il
+     vuoto (spazio) vale il piano della postazione: conta solo il lato.
    - Cammina scivolando a passi (STEP_HZ al secondo, curve morbide, niente
      scatti): la postazione intera (camera + mani) si abbassa appena a ogni
      appoggio, e le MANI con la palla ondeggiano di lato e ad arco, un passo a
      destra e uno a sinistra, un filo in ritardo sul corpo (handSway, letto
      dal loop quando posa la palla a riposo).
-   - Se c'è il canestro la visuale si gira verso di lui durante la
-     camminata; dove è parcheggiato (hub, negozio) resta dove guardavi.
-   - Fuori dai limiti ci si ferma al bordo; oltre 3 m dal bordo, o sopra
-     l'orizzonte, il doppio clic non fa niente. Mai a meno di 1,5 m da
-     ferro e palo.
-   - BINARIO (m.walkRail, hub): niente camminata libera. Ci si sposta solo
-     lungo il binario (un segmento: rail.project dà il suo punto più vicino al
-     clic) e la visuale si gira sempre verso rail.face (il canestro).
    - Si resta dove si è: a casa si torna solo con Substitution.snapHome
      (cambio livello, slot, menù); l'hub poi rimette il giocatore sul binario.
 
-   Dove vale (AREAS): hub (il binario), negozio, covo, garage e prato
-   del medioevo (zone della SOSTITUZIONE, ma da z = 0 per poter tornare
-   alla partenza). Bloccato: cutscene/portali, boss fight, palla non in
-   mano, menù/acquisti/scheda, mazzafionda, minigun e cannone.
+   Dove vale: ogni livello che dichiara walkRail (hub, negozio, covo,
+   garage, medioevo, spazio, techno, sfida 1vs1). ECCEZIONE: il MARE non ha
+   binario, la barca si guida col timone (15f-boat-end.js). Un
+   getter che dà null lo spegne (boss fight del medioevo). Bloccato anche: cutscene/portali, palla non in mano,
+   menù/acquisti/scheda, mazzafionda, minigun e cannone.
    La postazione è quella di setPlayerSpot (01-config.js).
    ============================================================ */
 const FloorMove = (function () {
@@ -21317,26 +21354,30 @@ const FloorMove = (function () {
   const TAP_PX = 12;           // oltre questo spostamento è un trascinamento, non un tocco
   const TAP_MS = 350;          // tocco troppo lungo = non è un clic
   const WALK_SPEED = 5;        // m/s di media
-  const EDGE_MAX = 3;          // clic fuori zona: entro 3 m ci si ferma al bordo, oltre niente
-  const HOOP_KEEP = 1.5;       // distanza minima da ferro e palo
+  const RAIL_HALF = 7.5;       // binario standard: al massimo 7,5 m per parte (come la palestra)
   const STEP_HZ = 1.9;         // passi al secondo (andatura naturale)
   const BOB = 0.018;           // corpo: abbassamento a ogni appoggio (m)
   const HAND_SIDE = 0.035;     // mani: ondeggio di lato (m), un passo per parte
   const HAND_UP = 0.02;        // mani: arco del dondolio (su agli estremi, giù al centro)
   const HAND_LAG = 0.45;       // ritardo delle mani sul corpo (rad di fase)
 
-  /* ---- dove si cammina: { rect:[xMin,xMax,zMin,zMax] }, { r } (cerchio sull'origine)
-     o { rail } (binario del livello: { project(x, z), face:{x,z} }) ---- */
+  /* ---- il binario del livello (null = qui non ci si sposta) ---- */
   function area() {
     if (!level.active || level.transitioning) return null;
     const m = level.current;
-    if (!m) return null;
-    if (m.walkRail) return { rail: m.walkRail };   // hub: solo lungo il binario
-    if (m.id === "shop" || m.id === "secret" || m.id === "garage" || m.id === "medieval") {
-      const b = m.substBounds;               // medioevo: null nella boss fight
-      return b ? { rect: [b[0], b[1], Math.min(0, b[2]), b[3]] } : null;
-    }
-    return null;
+    return (m && m.walkRail) || null;
+  }
+
+  /* Binario standard: laterale (lungo x) da x0 a x1 alla quota z, tagliato a
+     ±RAIL_HALF. face: punto {x, z} da guardare, null = il canestro se c'è. */
+  function rail(x0, x1, z = 0, face = null) {
+    const R = { ax: Math.max(-RAIL_HALF, x0), az: z, bx: Math.min(RAIL_HALF, x1), bz: z, face };
+    R.project = (x, zz) => {
+      const dx = R.bx - R.ax, dz = R.bz - R.az, L2 = dx * dx + dz * dz;
+      const t = L2 > 1e-9 ? Math.max(0, Math.min(1, ((x - R.ax) * dx + (zz - R.az) * dz) / L2)) : 0;
+      return { x: R.ax + dx * t, z: R.az + dz * t };
+    };
+    return R;
   }
 
   function blocked() {
@@ -21385,35 +21426,10 @@ const FloorMove = (function () {
       if (t <= 0 || t > 120) return null;
       x = o.x + d.x * t; z = -(o.z + d.z * t);         // render → fisica
       const g = groundInfo(x, z);
-      if (!g || g.water || g.y < -5) return null;
+      if (!g || g.water || g.y < -5) break;            // vuoto/acqua: basta il piano trovato (conta il lato)
       h = g.y;
     }
     return { x, z };
-  }
-
-  // porta (x, z) dentro la zona; null se il punto era troppo lontano dal bordo
-  function clampTo(a, x, z) {
-    let cx = x, cz = z;
-    if (a.r) {
-      const d = Math.hypot(x, z);
-      if (d > a.r) { cx = x * a.r / d; cz = z * a.r / d; }
-    } else {
-      cx = Math.max(a.rect[0], Math.min(a.rect[1], x));
-      cz = Math.max(a.rect[2], Math.min(a.rect[3], z));
-    }
-    return Math.hypot(x - cx, z - cz) > EDGE_MAX ? null : { x: cx, z: cz };
-  }
-  // fuori dal cerchio di 1,5 m attorno a ferro e palo (solo col canestro in scena)
-  function keepOffHoop(q) {
-    if (hoop.y < 0) return q;
-    for (const [hx, hz] of [[hoop.x, hoop.z], [hoop.poleBx, hoop.poleBz]]) {
-      if (!isFinite(hx) || !isFinite(hz)) continue;
-      const dx = q.x - hx, dz = q.z - hz, d = Math.hypot(dx, dz);
-      if (d >= HOOP_KEEP) continue;
-      const nx = d > 1e-4 ? dx / d : 0, nz = d > 1e-4 ? dz / d : -1;   // davanti al canestro, verso il giocatore
-      q.x = hx + nx * HOOP_KEEP; q.z = hz + nz * HOOP_KEEP;
-    }
-    return q;
   }
 
   /* ---- camminata ---- */
@@ -21433,18 +21449,10 @@ const FloorMove = (function () {
     const a = area();
     const hit = a && floorPoint(p);
     if (!hit) return false;
-    let q, face = null;
-    if (a.rail) {
-      // binario: il punto del binario più vicino al clic, sempre di fronte al canestro
-      const R = a.rail;
-      q = R.project(hit.x, hit.z);
-      face = Math.atan2(-(R.face.x - q.x), R.face.z - q.z);
-    } else {
-      q = clampTo(a, hit.x, hit.z);
-      if (!q) return false;
-      q = keepOffHoop(q);
-      q = clampTo(a, q.x, q.z) || q;
-    }
+    // il punto del binario più vicino al clic, girati verso face (o il canestro)
+    const q = a.project(hit.x, hit.z);
+    const F = a.face || (hoop.y >= 0 ? hoop : null);
+    const face = F ? Math.atan2(-(F.x - q.x), F.z - q.z) : null;
     const g = groundInfo(q.x, q.z);
     if (!g || g.water || g.y < -5) return false;
     // si riparte dalla posizione vera (anche a metà di una camminata), senza il passo
@@ -21455,16 +21463,16 @@ const FloorMove = (function () {
     // la visuale girata diventa la direzione della postazione (stessa inquadratura)
     const look = playerSpot.yaw + (game.viewYaw || 0);
     game.viewYaw = game.camBaseYaw = 0;
-    walk.turn = face !== null || hoop.y >= 0;
+    walk.turn = face !== null;
     walk.yaw0 = look;
-    walk.yaw1 = walk.turn ? look + angDiff(look, face !== null ? face : Substitution.yawToHoop(q.x, q.z)) : look;
+    walk.yaw1 = walk.turn ? look + angDiff(look, face) : look;
     walk.pitch0 = game.viewPitch || 0;
     if (walk.turn) game.camBasePitch = 0;
     walk.sx = sx; walk.sz = sz; walk.dx = q.x; walk.dz = q.z; walk.len = len;
     walk.t = 0; walk.dur = 0.25 + len / WALK_SPEED;
     walk.lvl = level.current;
     walk.on = true;
-    place(sx, sz, groundInfo(sx, sz).y, look);
+    place(sx, sz, groundY(sx, sz), look);
     return true;
   }
 
@@ -21476,14 +21484,19 @@ const FloorMove = (function () {
     walk.lx = x; walk.ly = y; walk.lz = z; walk.lyaw = yaw;
   }
 
+  // quota del pavimento sotto la postazione
+  function groundY(x, z) {
+    const g = groundInfo(x, z);
+    return g && !g.water ? g.y : 0;
+  }
+
   function stop() {
     if (!walk.on) return;
     walk.on = false;
     walk.hs = walk.hu = 0;
     // chi resta fermo a metà strada torna con i piedi a terra (via il passo)
     if (playerSpot.x === walk.lx && playerSpot.z === walk.lz && playerSpot.y === walk.ly) {
-      const g = groundInfo(playerSpot.x, playerSpot.z);
-      place(playerSpot.x, playerSpot.z, g && !g.water ? g.y : 0, playerSpot.yaw);
+      place(playerSpot.x, playerSpot.z, groundY(playerSpot.x, playerSpot.z), playerSpot.yaw);
     }
   }
 
@@ -21503,8 +21516,7 @@ const FloorMove = (function () {
     const ux = (walk.dx - walk.sx) / walk.len, uz = (walk.dz - walk.sz) / walk.len;
     const dist = walk.len * e;
     let x = walk.sx + ux * dist, z = walk.sz + uz * dist;
-    const g = groundInfo(x, z);
-    let y = g && !g.water ? g.y : playerSpot.y;
+    let y = groundY(x, z);
     // passi: un passo = mezzo giro di fase; tutto morbido e nullo a inizio e fine
     const env = Math.sin(Math.PI * k);
     const ph = Math.PI * STEP_HZ * walk.t;
@@ -21516,7 +21528,7 @@ const FloorMove = (function () {
     const yaw = walk.yaw0 + (walk.yaw1 - walk.yaw0) * e;
     if (walk.turn) game.viewPitch = walk.pitch0 * (1 - e);
     if (k >= 1) {
-      place(walk.dx, walk.dz, g && !g.water ? g.y : 0, walk.yaw1);
+      place(walk.dx, walk.dz, groundY(walk.dx, walk.dz), walk.yaw1);
       walk.on = false;
       walk.hs = walk.hu = 0;
       return;
@@ -21533,7 +21545,7 @@ const FloorMove = (function () {
     return _hand;
   }
 
-  return { tryDown, noteUp, update, handSway, walking: () => walk.on };
+  return { rail, tryDown, noteUp, update, handSway, walking: () => walk.on };
 })();
 /* ============================================================
    MIRA DELLA MAZZAFIONDA — il mirino segue SEMPRE e SOLO la visuale.
@@ -22361,8 +22373,7 @@ function _putDash(mesh, k, pts, n, a, e, w) {
   return true;
 }
 /* count > 0 → ESATTAMENTE `count` trattini distribuiti in modo uniforme sul
-   tratto visibile (linea della stat PRECISIONE: 3 a lv0, +1 per livello), fermi,
-   un po' più tenui verso la coda. count = 0 → tratteggio continuo a passo fisso
+   tratto visibile, fermi, un po' più tenui verso la coda. count = 0 → tratteggio continuo a passo fisso
    che scorre verso il bersaglio (MIRA GUIDATA, mazzafionda). */
 function drawDashes(mesh, pts, s0, sEnd, fadeLen, bright, t, count) {
   const n = _pathCum(pts);
@@ -22396,10 +22407,11 @@ function drawDashes(mesh, pts, s0, sEnd, fadeLen, bright, t, count) {
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
 }
 
-/* Linea di mira di un lancio `l` su `mesh`. reach = frazione dell'arco vero
-   mostrata (PRECISIONE 40%…85%, MIRA GUIDATA 100%); count = numero di trattini
-   (PRECISIONE: 3 + livello; 0 = linea intera della MIRA GUIDATA). Ritorna
-   l'esito previsto (per il mirino della MIRA GUIDATA). */
+/* Linea di mira di un lancio `l` su `mesh` (MIRA GUIDATA: reach 1, count 0 =
+   linea intera; tiro normale: reach 0, count 1 = solo il primo trattino).
+   reach = frazione dell'arco vero mostrata; count = numero di trattini fissi
+   (0 = tratteggio continuo). Ritorna l'esito previsto
+   (per il mirino della MIRA GUIDATA). */
 function showAimLine(mesh, l, reach, count, t) {
   const bright = 1;
   const ox = ball.x + (l.ox || 0), oy = ball.y + (l.oy || 0), oz = ball.z + (l.oz || 0);
@@ -22417,6 +22429,12 @@ function showAimLine(mesh, l, reach, count, t) {
     return null;
   }
   const res = predictPath(ox, oy, oz, l.vx, l.vy, l.vz, releaseSpin(l), true);
+  const s0 = ball.r + 0.04;
+  // reach 0 + count → solo i primi `count` trattini del tratteggio (tiro normale)
+  if (reach <= 0 && count > 0) {
+    drawDashes(mesh, predictPts, s0, s0 + count * (AIM_DASH_LEN + AIM_DASH_GAP), 0, bright, t, count);
+    return res;
+  }
   const n = _pathCum(predictPts);
   const total = n > 1 ? _cum[n - 1] : 0;
   const full = reach >= 1;
@@ -22448,22 +22466,27 @@ function updateAimHelpers(t) {
       if (!powerHoldT0) powerHoldT0 = performance.now();
       if (powerValEl) powerValEl.style.opacity = performance.now() - powerHoldT0 < POWER_NUM_SHOW_MS ? 1 : 0;
       reticle.visible = false;
-      aimDots.visible = true;
-      /* LINEA DI MIRA TRATTEGGIATA, sul volo VERO (predictPath):
-         • stat PRECISIONE: 3 trattini a lv0, +1 per livello (8 a lv5), sparsi su
-           un tratto d'arco sempre più lungo (40% → 85%); MIRA GUIDATA = linea
-           intera fino all'arrivo, col mirino (oro = canestro, arancio = ferro);
-         • solo per il tiro NORMALE: col TIRO A PARABOLA armato (aura verde)
-           nessuna linea — la segnala solo l'aura. */
-      if (game.parabolaAim) {
-        aimDash.count = 0;
-      } else {
-        const guided = game.aimGuideTimer > 0;
-        const reach = guided ? 1 : Stats.aimReach();
-        const count = guided ? 0 : Stats.aimDashes();
+      /* LINEA DI MIRA TRATTEGGIATA, sul volo VERO (predictPath).
+         REGOLA (2026-11-18): compare SOLO col potenziamento volante MIRA GUIDATA,
+         e sempre a pieno regime: linea intera fino all'arrivo, col mirino
+         (oro = canestro, arancio = ferro). Senza MIRA GUIDATA nessuna linea, né
+         sul tiro normale né sulla mazzafionda. Col TIRO A PARABOLA armato (aura
+         verde) nessuna linea comunque — la segnala solo l'aura. */
+      const guided = game.aimGuideTimer > 0;
+      if (guided && !game.parabolaAim) {
+        aimDots.visible = true;
         syncHoopPolePhysics();   // palo nella posa di questo frame (la balena si muove anche a palla ferma)
-        const res = showAimLine(aimDash, l, reach, count, t);
-        if (guided && res) placeReticle(res, t);
+        const res = showAimLine(aimDash, l, 1, 0, t);
+        if (res) placeReticle(res, t);
+      } else if (!l.straight && !game.parabolaAim) {
+        /* TIRO NORMALE senza MIRA GUIDATA (2026-11-18): solo il PRIMO
+           trattino della linea, fermo, per dare il senso della direzione.
+           Niente mirino, niente linea intera. */
+        aimDots.visible = true;
+        showAimLine(aimDash, l, 0, 1, t);
+      } else {
+        aimDots.visible = false;
+        aimDash.count = 0;
       }
     } else {
       aimDots.visible = false;
@@ -23638,6 +23661,24 @@ function resetTimedPowerups() {
 }
 
 window.resetTimedPowerups = resetTimedPowerups;
+
+/* DEV 🏹: fa comparire SUBITO l'anello volante della MIRA GUIDATA (al posto di
+   un eventuale altro pickup in volo, uno solo alla volta). Dove i pickup volanti
+   non sono ammessi (negozio, boss spaziale, ferro parcheggiato) l'anello non
+   potrebbe vivere: lì accende direttamente l'effetto. */
+function devSpawnAimGuide() {
+  despawnFirePowerup();
+  despawnMagnetPowerup();
+  despawnWidenPowerup();
+  despawnTriplePowerup();
+  if (!flyingPowerupsAllowed()) {
+    pu.x = ball.x; pu.y = ball.y; pu.z = ball.z;
+    collectPowerup();
+    return;
+  }
+  spawnPowerup();
+}
+window.devSpawnAimGuide = devSpawnAimGuide;
 /* ============================================================
    HUD DOM
    ============================================================ */
@@ -24273,8 +24314,6 @@ const STAT_ICONS = {
   arco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20 Q12 1 20 20"/><circle cx="12" cy="20" r="1.8" fill="currentColor" stroke="none"/></svg>',
   // TOCCO — palla con freccia di backspin
   tocco: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="5.4"/><path d="M5.5 9.2 Q12 4 18.6 8.2"/><path d="M18.6 8.2 l-3.4 -.4 M18.6 8.2 l-.5 3.3"/></svg>',
-  // PRECISIONE — bersaglio
-  precisione: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.6"/><circle cx="12" cy="12" r="0.7" fill="currentColor" stroke="none"/><path d="M12 1.5 V4 M12 20 V22.5 M1.5 12 H4 M20 12 H22.5" stroke-linecap="round"/></svg>',
   // OSCILLAZIONE — onda (l'ondeggio che si vuole calmare)
   oscillazione: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12 Q5.5 4 9 12 T16 12 T23 12"/></svg>',
 };
@@ -24285,7 +24324,6 @@ const STAT_UI = {
   gittata:      { nome: "RANGE",     desc: "Verticality: carries farther and drops in" },
   arco:         { nome: "ARC",       desc: "Easier, higher lob · wider window" },
   tocco:        { nome: "TOUCH",     desc: "Soft backspin: rolls in off the rim" },
-  precisione:   { nome: "PRECISION", desc: "Longer aim line · shows more of the flight" },
   oscillazione: { nome: "SWAY",      desc: "Steadier hands: less sway while aiming" },
 };
 
@@ -30983,6 +31021,7 @@ const boatLevel = (function () {
     if (!attackTentacle) buildAttackTentacle();
     if (boatAttack.phase !== "idle") return;
     const a = attackTentacle;
+    ARM_CROSS.x = boatX();                 // esce davanti alla barca, dovunque sia
     a.manual = false; a.h = 0;
     armSetPose("rise", "rise", 1, 0, false);
     boatAttack.phase = "rise";
@@ -31023,6 +31062,9 @@ const boatLevel = (function () {
     const a = attackTentacle;
     if (!a) return;
     a.clock += dt;
+    // la barca naviga anche nella boss fight (15f): il braccio esce dall'acqua
+    // davanti a lei e la segue, così la frustata la prende dove si trova
+    if (boatAttack.phase !== "idle") ARM_CROSS.x = boatX();
     updateArmFX(dt);
     const ph = boatAttack.phase;
     if (ph === "idle") return;
@@ -32445,7 +32487,8 @@ const boatLevel = (function () {
      il bordo (sopra BOAT_WALL_YHI) e non viene toccato. */
   function bounceBoatWall(rest) {
     if (!boatWall) return;
-    const bx = ball.x, by = ball.y, bz = ball.z;
+    // la barca naviga sul binario (15f): il perimetro è suo, la palla va nel suo riferimento
+    const bx = ball.x - boatX(), by = ball.y, bz = ball.z;
     // fuori dalla fascia verticale del legno: niente da fare (scavalca o è a terra)
     if (by - ball.r > BOAT_WALL_YHI || by + ball.r < BOAT_WALL_YLO) return;
 
@@ -32535,9 +32578,9 @@ const boatLevel = (function () {
     // Durante il finale il barile si rompe e il polpo schizza via: niente
     // corpo fisico, altrimenti bloccherebbe il tiro nel vuoto.
     if (!finale.active) {
-      bounceSphere(0.75, 0.93, 2.55, 0.27, 0.65);   // barile (legno)
+      bounceSphere(0.75 + boatX(), 0.93, 2.55, 0.27, 0.65);   // barile (legno), segue la barca
       // Polpo: mantello + tentacoli sopra il bordo
-      bounceSphere(0.75, 1.58, 2.55, 0.28, 0.35);   // polpo (morbido)
+      bounceSphere(0.75 + boatX(), 1.58, 2.55, 0.28, 0.35);   // polpo (morbido)
     }
 
     // ---- KRAKEN (polpo gigante): testa, gonna, 5 tentacoli ----
@@ -32578,7 +32621,7 @@ const boatLevel = (function () {
 
     // ---- TIMONE (posizione fissa, a sinistra della palla) ----
     // Three.js world: (-0.70, 1.15, -1.40)  →  fisica: (-0.70, 1.15, 1.40)
-    bounceSphere(-0.70, 1.15, 1.40, 0.26, 0.55);  // ruota del timone
+    bounceSphere(-0.70 + boatX(), 1.15, 1.40, 0.26, 0.55);  // ruota del timone (segue la barca)
 
     // ---- SCAFO: murata + capo di banda (perimetro della barca) ----
     // Legno duro ma non metallico: rimbalzo contenuto.
@@ -32658,6 +32701,8 @@ const boatLevel = (function () {
 
   function exit() {
     world.visible = false;
+    if (boatGroup) boatGroup.position.x = 0;   // barca al suo posto (anche per la veduta del portale)
+    sail.held = false; sail.w = 0; sail.hist.length = 0;
     if (sun) sun.visible = false;
     if (hemi) hemi.visible = false;
     // esci pulito dalla modalità cannone: ripristina palla e mani
@@ -32712,7 +32757,7 @@ const boatLevel = (function () {
      palla che va lunga o larga finisce in acqua e il tiro si chiude. */
   function groundAt(x, z) {
     // dentro il perimetro dello scafo c'è il ponte; tutt'intorno mare aperto.
-    if (insideBoat(x, z)) return DECK;
+    if (insideBoat(x - boatX(), z)) return DECK;   // la barca naviga sul binario (15f)
     return WATER;
   }
 
@@ -36338,7 +36383,7 @@ const boatLevel = (function () {
     if (smoke) for (const s of smoke) { s.life = 0; s.mesh.visible = false; }
     if (explSmoke) for (const s of explSmoke) { s.life = 0; s.mesh.visible = false; }
     if (cannonLaser) cannonLaser.visible = false;
-    if (helmWheel) helmWheel.rotation.z = 0;
+    if (helmWheel) helmWheel.rotation.z = sail.wheel;   // dopo il cannone il timone torna com'era
     if (cannonRig) cannonRig.visible = false;   // riappare solo quando il polpo emerge
     if (krakenUI) {
       krakenUI.grp.visible = false;
@@ -36367,8 +36412,133 @@ const boatLevel = (function () {
     }
   }
 
+  /* =========================================================
+     NAVIGAZIONE COL TIMONE — eccezione del MARE al movimento standard
+     (2026-11-18, richiesta utente)
+     ---------------------------------------------------------
+     Qui non c'è il binario a doppio tap: la BARCA la sposti tu col TIMONE.
+     - Tocca la ruota (helmWheel) e girala attorno al suo centro: segue il
+       dito 1:1. Senso antiorario = la barca va a SINISTRA, orario = a DESTRA;
+       ogni giro di ruota sono HELM.K·2π m (~2 m) di navigazione.
+     - Lasciata mentre gira, la ruota continua per INERZIA con la velocità
+       del gesto (misurata sugli ultimi 0,1 s) e rallenta per attrito: una
+       spinta forte la fa girare a lungo, una lenta si ferma subito.
+     - A fine corsa (x ±HELM.HALF) la ruota è a battuta: non gira oltre.
+     - La barca insegue la ruota con un filo d'inerzia dello scafo (HELM.LAG)
+       e porta con sé la postazione (playerSpot.x): modello
+       (boatGroup.position.x) e collisioni (boatX(): ponte, murata, barile,
+       timone in 15c). La visuale non gira: navighi di lato.
+     - Vale ANCHE nella boss fight del Kraken: il tentacolo d'attacco esce
+       dall'acqua davanti alla barca e la segue (ARM_CROSS.x = boatX(), 15a3).
+       In modalità cannone il timone serve a mirare (15d) e non si afferra.
+     Agganci: 09-input chiama grabDown / grabMove / grabUp / grabHeld del
+     livello prima del tiro e della visuale.
+     ========================================================= */
+  const HELM = {
+    K: 0.33,          // m di navigazione per radiante di ruota (~2 m a giro)
+    HALF: 7.5,        // corsa della barca: x da −7,5 a 7,5 (come il binario standard)
+    FRICTION: 2.2,    // attrito della ruota lasciata libera (1/s)
+    MAX_W: 14,        // velocità massima della ruota (rad/s)
+    LAG: 4.5,         // inerzia dello scafo che insegue la ruota (1/s)
+    GRAB_PX: 46,      // raggio minimo di presa sullo schermo (px, misura di un dito)
+    GRAB_K: 1.45,     // presa = raggio della ruota a schermo × GRAB_K
+    HIST_MS: 100      // finestra per misurare la velocità del gesto
+  };
+  const sail = { wheel: 0, w: 0, target: 0, x: 0, set: 0, held: false, lastA: 0, hist: [] };
+  const _hc = new T.Vector3(), _hr = new T.Vector3();
+
+  // spostamento laterale della barca (= della postazione)
+  function boatX() { return playerSpot.on ? playerSpot.x : 0; }
+
+  // centro e raggio della ruota sullo schermo (px)
+  function helmScreen() {
+    helmWheel.updateWorldMatrix(true, false);
+    helmWheel.getWorldPosition(_hc);
+    camera.updateMatrixWorld();
+    const e = camera.matrixWorld.elements;             // colonna 0 = "destra" della camera
+    _hr.set(_hc.x + e[0] * 0.22, _hc.y + e[1] * 0.22, _hc.z + e[2] * 0.22).project(camera);
+    _hc.project(camera);
+    const W = window.innerWidth, H = window.innerHeight;
+    const cx = (_hc.x * 0.5 + 0.5) * W, cy = (-_hc.y * 0.5 + 0.5) * H;
+    const r = Math.hypot((_hr.x * 0.5 + 0.5) * W - cx, (-_hr.y * 0.5 + 0.5) * H - cy);
+    return { x: cx, y: cy, r, front: _hc.z < 1 };
+  }
+  const angAt = (c, p) => Math.atan2(-(p.y - c.y), p.x - c.x);   // antiorario sullo schermo = +
+
+  // gira la ruota di da (rad): la barca va dove la porta, fino a battuta. Ritorna il giro fatto.
+  function turnWheel(da) {
+    const t = Math.max(-HELM.HALF, Math.min(HELM.HALF, sail.target - da * HELM.K));
+    const done = -(t - sail.target) / HELM.K;
+    sail.target = t;
+    sail.wheel += done;
+    return done;
+  }
+  function wheelHist() {
+    const now = performance.now();
+    sail.hist.push({ t: now, a: sail.wheel });
+    while (sail.hist.length > 2 && now - sail.hist[0].t > HELM.HIST_MS) sail.hist.shift();
+  }
+
+  function grabDown(p) {
+    if (!helmWheel || !world.visible || cannonCtl.phase !== "off" || game.cannonMode) return false;
+    const c = helmScreen();
+    if (!c.front || Math.hypot(p.x - c.x, p.y - c.y) > Math.max(HELM.GRAB_PX, c.r * HELM.GRAB_K)) return false;
+    sail.held = true; sail.w = 0;
+    sail.lastA = angAt(c, p);
+    sail.hist.length = 0; wheelHist();
+    return true;
+  }
+  function grabMove(p) {
+    if (!sail.held) return;
+    const c = helmScreen();
+    const a = angAt(c, p);
+    let da = a - sail.lastA;
+    da -= Math.round(da / (Math.PI * 2)) * Math.PI * 2;  // giro più corto
+    sail.lastA = a;
+    // troppo vicino al mozzo l'angolo impazzisce: lì il dito non gira la ruota
+    if (Math.hypot(p.x - c.x, p.y - c.y) > Math.max(6, c.r * 0.2)) turnWheel(da);
+    wheelHist();
+  }
+  function grabUp() {
+    if (!sail.held) return;
+    sail.held = false;
+    wheelHist();
+    const h = sail.hist, a = h[0], b = h[h.length - 1];
+    const span = (b.t - a.t) / 1000;
+    // velocità del gesto: con un dito fermo da un po' la ruota resta dov'è
+    sail.w = span > 0.02 && performance.now() - b.t < 60 ? (b.a - a.a) / span : 0;
+    sail.w = Math.max(-HELM.MAX_W, Math.min(HELM.MAX_W, sail.w));
+    sail.hist.length = 0;
+  }
+
+  function updateSail(dt) {
+    // qualcun altro ha spostato la postazione (snapHome: cambio livello, menù, slot)
+    if (Math.abs(boatX() - sail.set) > 1e-6) { sail.x = sail.target = boatX(); sail.w = 0; }
+    // ruota lasciata: gira per inerzia e rallenta; a battuta si ferma
+    if (!sail.held && sail.w !== 0) {
+      const want = sail.w * dt, done = turnWheel(want);
+      if (Math.abs(done) < Math.abs(want) * 0.999) sail.w = 0;
+      sail.w *= Math.exp(-HELM.FRICTION * dt);
+      if (Math.abs(sail.w) < 0.05) sail.w = 0;
+    }
+    // lo scafo insegue la ruota
+    const ox = sail.x;
+    sail.x += (sail.target - sail.x) * (1 - Math.exp(-HELM.LAG * dt));
+    if (Math.abs(sail.target - sail.x) < 1e-4) sail.x = sail.target;
+    if (sail.x !== ox) {
+      setPlayerSpot(sail.x, playerSpot.y, playerSpot.z, playerSpot.yaw);
+      camTargetCur.x += sail.x - ox;
+    }
+    sail.set = boatX();
+    if (boatGroup) boatGroup.position.x = sail.set;
+    // il timone lo pilota la modalità cannone quando è accesa (15d)
+    if (helmWheel && cannonCtl.phase === "off") helmWheel.rotation.z = sail.wheel;
+  }
+
   /* ---------- update per-frame ---------- */
   function update(dt, t) {
+    updateSail(dt);
+
     // increspature del mare che scorrono (due ottave a velocità diverse)
     if (seaNormalA) { seaNormalA.offset.x = (t * 0.030) % 1; seaNormalA.offset.y = (t * 0.020) % 1; }
     if (seaNormalB) { seaNormalB.offset.x = (-t * 0.045) % 1; seaNormalB.offset.y = (t * 0.035) % 1; }
@@ -36583,6 +36753,8 @@ const boatLevel = (function () {
     portalView, refreshPortalView,
     // zoom della visuale ridotto del 15% (viewFov, 04-scene): campo più largo
     viewZoom: 0.85,
+    // movimento: niente binario, la BARCA si guida col TIMONE (navigazione, sopra), anche nella boss fight
+    grabDown, grabMove, grabUp, grabHeld: () => sail.held,
     // potenziamenti volanti (10b): restano anche nella boss fight del Kraken;
     // si ritirano solo a Kraken morto (esplosione + premio: mazzafionda)
     powerupsBlocked: () => finale.active && finale.krakenHP <= 0,
@@ -41067,6 +41239,7 @@ function buildShopkeeper(opts) {
   const lairLevel = {
     id: "secret",
     substBounds: [-LAIR_W / 2 + 0.7, LAIR_W / 2 - 0.7, 0.3, LAIR_BACK - 0.7],   // SOSTITUZIONE
+    walkRail: FloorMove.rail(-LAIR_W / 2 + 0.7, LAIR_W / 2 - 0.7),             // movimento standard (09c)
     enter: lairEnter, exit: lairExit, update: lairUpdate,
     groundAt: () => ({ y: 0, water: false }),
     collideBall: lairCollideBall,
@@ -42029,6 +42202,7 @@ function buildShopkeeper(opts) {
   return {
     id: "shop",
     substBounds: [-SHOP_W / 2 + 0.7, SHOP_W / 2 - 0.7, 0.3, SHOP_D - 0.7],   // SOSTITUZIONE
+    walkRail: FloorMove.rail(-SHOP_W / 2 + 0.7, SHOP_W / 2 - 0.7),          // movimento standard (09c)
     enter, exit, update,
     noFlyingPowerups: true,       // negozio: niente canestro vero, niente pickup volanti (10b)
     cameraOverride: shopCameraOverride,
@@ -43370,7 +43544,8 @@ const garageLevel = (function () {
      REGISTRAZIONE
      ========================================================= */
   const mod = { id: "garage", enter, exit, update,
-                substBounds: [-G_W / 2 + 0.7, G_W / 2 - 0.7, 0.3, G_D - 0.7] };   // SOSTITUZIONE
+                substBounds: [-G_W / 2 + 0.7, G_W / 2 - 0.7, 0.3, G_D - 0.7],     // SOSTITUZIONE
+                walkRail: FloorMove.rail(-G_W / 2 + 0.7, G_W / 2 - 0.7) };        // movimento standard (09c)
   registerLevel(mod);
   return mod;
 })();
@@ -46519,7 +46694,8 @@ const spaceLevel = (function () {
      TERRENO — asteroide sotto il giocatore, vuoto tutt'intorno
      ========================================================= */
   function groundAt(x, z) {
-    const dx = x - BALL_START.x, dz = z - BALL_START.z;
+    // l'asteroide sta fermo: centro = partenza di casa (BALL_HOME), non la palla della postazione
+    const dx = x - BALL_HOME.x, dz = z - BALL_HOME.z;
     if (dx * dx + dz * dz <= PAD_R * PAD_R) return { y: 0, water: false };
     return VOID;
   }
@@ -46611,6 +46787,115 @@ const spaceLevel = (function () {
        via come un palloncino).
      - launchScale : 0.6  → la palla parte al 60% della velocità piena.
      ========================================================= */
+  /* =========================================================
+     VEDUTA PER IL PORTALE DEL TECHNO (20x, makeRiftPortal di 21-hub-9)
+     ---------------------------------------------------------
+     Come il mare nel portale della palestra (15f): dentro lo specchio del
+     portale c'è una FOTOGRAFIA dello spazio vero (pianeta-canestro col
+     canestro conficcato, UFO col cartellone, stelle, nebulose, pianetino
+     rosso), scattata dal punto del giocatore. Il mondo si costruisce in
+     anticipo a nome dello spazio, si disegna in una texture e si libera
+     subito dalla GPU (torna su da solo quando ci entri). La texture resta
+     finché dura il gioco e si rifà solo se il contesto grafico si perde.
+
+     spaceLevel.portalView(lato)     → texture quadrata (la crea e la scatta)
+     spaceLevel.refreshPortalView()  → la rifà se era rimasta indietro
+     ========================================================= */
+  const VIEW = {
+    eye: [0, 1.70, 0],            // occhi del giocatore sull'asteroide
+    look: [0, 4.2, -10],          // un po' sopra il ferro: pianeta in basso, UFO e cielo sopra
+    fov: 70
+  };
+  let viewRT = null, viewStale = false;
+
+  function shootPortalView() {
+    // contesto ripreso mentre si gioca nello spazio: si rifà quando serve di nuovo
+    if (level.current === mod) { viewStale = true; return; }
+    viewStale = false;
+
+    // il mondo si costruisce (o si riprende) A NOME DELLO SPAZIO: le sue texture
+    // generate devono restare sue, non di chi sta chiedendo la veduta (GpuLife)
+    const cur = level.current, act = level.active, goal = level.goalMakes;
+    level.current = mod; level.active = true; level.goalMakes = 5;
+    try {
+      if (!built) build();
+      GpuLife.restore(mod);
+    } finally {
+      level.current = cur; level.active = act; level.goalMakes = goal;
+    }
+
+    // posa del canestro: conficcato nel pianeta come in enter() (poi torna dov'era)
+    const hp = { parent: hoopGroup.parent, pos: hoopGroup.position.clone(), rot: hoopGroup.rotation.clone(),
+      scale: hoopGroup.scale.clone(), vis: hoopGroup.visible, board: boardGroup.position.z };
+    hoopGroup.position.set(0, 0, -HOOP_Z);
+    hoopGroup.rotation.set(0.08, 0, 0);
+    hoopGroup.scale.set(1, 1, 1);
+    hoopGroup.visible = true;
+    boardGroup.position.z = BOARD_OFFS - BOARD_SPACE;
+
+    // scena a parte: solo lo spazio, con le sue luci e il suo nero cosmico
+    const shot = new T.Scene();
+    shot.background = new T.Color(0x03040c);
+    const wp = world.parent, wasVis = world.visible;
+    shot.add(world);
+    shot.add(hoopGroup);
+    world.visible = true;
+    const cam = new T.PerspectiveCamera(VIEW.fov, 1, 0.05, 90);
+    cam.position.fromArray(VIEW.eye);
+    cam.lookAt(VIEW.look[0], VIEW.look[1], VIEW.look[2]);
+
+    // disegnata al doppio e ridotta: bordi puliti senza chiedere il multisample
+    const S2 = viewRT.width * 2;
+    const big = new T.WebGLRenderTarget(S2, S2, {
+      depthBuffer: true, stencilBuffer: false, generateMipmaps: false,
+      minFilter: T.LinearFilter, magFilter: T.LinearFilter
+    });
+    big.texture.colorSpace = viewRT.texture.colorSpace;
+    const prev = renderer.getRenderTarget();
+    try {
+      renderer.shadowMap.needsUpdate = true;      // l'ombra del sole va disegnata anche qui
+      renderer.setRenderTarget(big);
+      renderer.clear();
+      renderer.render(shot, cam);
+      renderer.setRenderTarget(prev);
+      GpuLife.copyTarget(big, viewRT);
+    } finally {
+      renderer.setRenderTarget(prev);
+      big.dispose();
+      // tutto al suo posto: il canestro dov'era, il mondo fuori scena
+      if (hp.parent) hp.parent.add(hoopGroup); else shot.remove(hoopGroup);
+      hoopGroup.position.copy(hp.pos);
+      hoopGroup.rotation.copy(hp.rot);
+      hoopGroup.scale.copy(hp.scale);
+      hoopGroup.visible = hp.vis;
+      boardGroup.position.z = hp.board;
+      if (wp) wp.add(world); else shot.remove(world);
+      world.visible = wasVis;
+      // e la memoria video dello spazio si libera, come all'uscita dal livello
+      GpuLife.releaseObjects([world], HOME_KEEP, null);
+      GpuLife.release(mod);
+    }
+  }
+
+  function portalView(size) {
+    if (!viewRT) {
+      viewRT = new T.WebGLRenderTarget(size, size, {
+        depthBuffer: false, stencilBuffer: false, generateMipmaps: true,
+        minFilter: T.LinearMipmapLinearFilter, magFilter: T.LinearFilter
+      });
+      const tx = viewRT.texture;
+      tx.colorSpace = renderer.capabilities.isWebGL2 ? T.SRGBColorSpace : T.NoColorSpace;
+      tx.wrapS = tx.wrapT = T.ClampToEdgeWrapping;
+      tx.anisotropy = GpuBake.MAX_ANISO;
+      try { shootPortalView(); } catch (e) { console.error("Veduta dello spazio:", e); }
+      GpuLife.track(viewRT, shootPortalView, null);
+    }
+    return viewRT.texture;
+  }
+  function refreshPortalView() {
+    if (viewRT && viewStale) shootPortalView();
+  }
+
   // al 5° canestro il sistema livelli chiama onComplete(): true = gestiamo qui il
   // finale (cutscene UFO), quindi NON si apre la transizione di ritorno.
   function onComplete() {
@@ -46623,11 +46908,13 @@ const spaceLevel = (function () {
                 onComplete,                      // 5° canestro → cutscene finale
                 collideBall,                     // palla contro alieni (danno allo sciame)
                 startSpaceFinale,                // DEV: avvio manuale della cutscene
+                portalView, refreshPortalView,   // fotografia per il portale del techno (20x)
                 // un tiro recuperato sta tornando al contatore: il game over aspetta
                 shotsPending: () => loot.state === "spit" || (loot.state === "magnet" && loot.refund),
                 // potenziamenti volanti (10b): niente dalla cutscene in poi (boss aliena)
                 powerupsBlocked: () => finale.active || finale.done,
-                gravityScale: 0.159135, launchScale: 0.6 };
+                gravityScale: 0.159135, launchScale: 0.6,
+                walkRail: FloorMove.rail(-2.4, 2.4) };   // movimento standard (09c): solo sull'asteroide (PAD_R)
   registerLevel(mod);
   return mod;
 })();
@@ -47091,6 +47378,8 @@ const arenaLevel = (function () {
     // ingresso: online (stanza già pronta in 19c) e/o dal menù principale
     setMode(online, menu) { net.on = !!online; fromMenu = !!menu; },
     suppressGameOver: true,   // la fine la gestisce endRun(), non il game-over palestra
+    // movimento standard (09c): il binario si ferma dove sei (x = 0), il GUEST ti sta a destra (BOT_X = 1)
+    walkRail: FloorMove.rail(-7.5, 0),
     goalMakes: 999999,
     // visuale (12-loop): camera fra te (x = 0) e il GUEST (x = BOT_X), un po'
     // più dalla tua parte, arretrata e un filo più alta → mani meno zoomate. Getter: ArenaBot (19b) è
@@ -53104,6 +53393,7 @@ const medievalLevel = (function () {
      REGISTRAZIONE
      ========================================================= */
   const SUBST_BOUNDS = [-14, 14, 0.3, 30];   // SOSTITUZIONE: prato davanti alla cinta
+  const RAIL = FloorMove.rail(-14, 14);      // movimento standard (09c): binario sul prato, verso il canestro
   const mod = { id: "medieval", enter, exit, update, groundAt, cameraOverride,
                 onComplete,                      // 5° canestro → arriva il drago
                 get camView() { return playerSpot.on ? null : CAM_VIEW; },
@@ -53117,7 +53407,9 @@ const medievalLevel = (function () {
                 // niente pickup volanti durante l'intro, il drago e la boss fight
                 powerupsBlocked: () => intro.active || finale.active || bossArena.on,
                 // la SOSTITUZIONE vale solo sul prato: sulle mura la postazione è della boss fight
-                get substBounds() { return bossArena.on ? null : SUBST_BOUNDS; } };
+                get substBounds() { return bossArena.on ? null : SUBST_BOUNDS; },
+                // binario: spento nella boss fight (la postazione è sulle mura)
+                get walkRail() { return bossArena.on ? null : RAIL; } };
   registerLevel(mod);
   return mod;
 })();
@@ -53130,7 +53422,8 @@ const medievalLevel = (function () {
 
    Scena (coordinate FISICHE: z positivo = lontano dal giocatore; le
    mesh vanno a -z):
-     - club buio 20 × 18 m, soffitto a 7.6 m, pavimento di cemento lucido;
+     - club buio 30 × 18.55 m, soffitto a 9.5 m, pavimento di cemento lucido;
+       niente casse a terra: le uniche casse sono quelle APPESE (bersagli);
      - PALCO alto 1 m in fondo, sopra la CONSOLLE (due lettori, mixer,
        portatile) e il DJ con le cuffie che annuisce a tempo;
      - dietro al DJ il LEDWALL (shader animato: barre dell'equalizzatore e
@@ -53138,11 +53431,11 @@ const medievalLevel = (function () {
        mobili (fasci di luce additivi + chiazze sul pavimento), i laser
        verdi, gli strobo e il cartellone del progresso (lettere 3D bianche
        standard appese con due cavi);
-     - il CANESTRO standard è montato sulla consolle: un traliccio
-       verticale imbullonato al fianco destro regge il tabellone;
+     - il CANESTRO è quello standard scalato di 0.7, a terra davanti al DJ
+       (setSmallHoop);
      - la FOLLA balla fra il giocatore e la consolle, più fitta sotto il
        palco: braccia che pompano, mani in alto, battiti sopra la testa,
-       due ragazze sulle spalle di qualcuno e tre "totem" (aste con la
+       tre ragazze sulle spalle di qualcuno e tre "totem" (aste con la
        bandiera) che svettano a 4 m. Sono SOLIDI: la palla ci rimbalza,
        quindi la traiettoria va cercata fra braccia, teste e bandiere.
    Musica a 136 BPM (lo stesso tempo del motore generativo, 03-audio): la
@@ -53158,6 +53451,12 @@ const medievalLevel = (function () {
    testa bassa: alcuni a fumare negli angoli di fondo, gli altri dalla PORTA DI
    USCITA in fondo a sinistra (non interagibile). Vedi "FINE DELLA FESTA" più
    sotto; hook DEV da console: devTechnoPartyOver().
+   FINE LIVELLO (5° canestro): la STESSA cutscene del VARCO della palestra
+   (makeRiftOpening, 21-hub-9c) apre lo STESSO portale (makeRiftPortal,
+   21-hub-9) sospeso sopra il bordo del palco, dietro il canestro piccolo
+   che viene risucchiato. Nello specchio del portale si vede lo SPAZIO
+   (fotografia: spaceLevel.portalView, 18); tirandoci dentro la palla si va
+   nello spazio. Hook DEV da console: devTechnoRift().
    ============================================================ */
 const technoLevel = (function () {
   let built = false;
@@ -53173,17 +53472,19 @@ const technoLevel = (function () {
      scalato tutto insieme (ferro, retina, tabellone, palo) di HOOP_S; la fisica
      riceve le stesse misure scalate in setSmallHoop() e le riprende in exit() */
   const HOOP_X = 0, HOOP_Z = 8.2, HOOP_S = 0.7;   // ferro a 3.05·0.7 = 2.14 m, palo a z 8.84
-  const SPK = [{ x0: -7.3, x1: -6.1 }, { x0: 6.1, x1: 7.3 }];  // casse ai lati del palco
-  const SPK_Z0 = 8.6, SPK_Z1 = 9.9, SPK_H = 3.2;
-  const TOWER_X = 10.6;                           // torri del traliccio, oltre le casse più esterne
+  const TOWER_X = 10.6;                           // torri del traliccio, oltre le casse appese più esterne
   const TRUSS_Y = 8.7, TRUSS_Z = 9.6;             // alto: sotto ci stanno le casse giganti appese
   /* parete di fondo vera (la scatola della sala finisce 0.25 m oltre zFar) e PORTA DI
-     USCITA in fondo a sinistra, fra la cassa a terra e la torre del traliccio: per ora
+     USCITA in fondo a sinistra, fra il palco e la torre del traliccio: per ora
      non è interagibile, si apre solo per i ballerini che escono a fine festa */
   const WALL_Z = ROOM.zFar + 0.25;
   const DOOR = { x: -8.9, w: 1.8, h: 2.3 };
   const CORR = { w: 2.4, h: 2.7, d: 4.0 };        // corridoio buio dietro la porta
   const GONE_Z = WALL_Z + 2.8;                    // in fondo al corridoio chi esce sparisce
+  /* PORTALE dello SPAZIO (fine livello): stesso disco della palestra (R 3.2),
+     sospeso sul bordo del palco (z 9.2: fra il filo del palco e la consolle),
+     dietro il canestro piccolo, davanti al DJ e al cartellone */
+  const RIFT_AT = { x: 0, z: 9.2, y: 4.2, R: 3.2 };
 
   /* ---------- tempo della serata ---------- */
   const BPM = 136;
@@ -53206,7 +53507,6 @@ const technoLevel = (function () {
       gloss: new T.MeshStandardMaterial({ color: 0x15151a, roughness: 0.35, metalness: 0.4 }),
       alu: new T.MeshStandardMaterial({ color: 0x9aa0a8, roughness: 0.38, metalness: 0.85 }),
       grill: new T.MeshStandardMaterial({ color: 0x1c1c22, roughness: 0.6, metalness: 0.3 }),
-      cone: new T.MeshStandardMaterial({ color: 0x2b2b31, roughness: 0.5, metalness: 0.2 }),
       vtx: new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.3 }),
       led: (c) => new T.MeshBasicMaterial({ color: c, toneMapped: false, fog: false })
     };
@@ -53532,20 +53832,6 @@ const technoLevel = (function () {
     screen.rotation.y = Math.PI;
     W(screen, -1.32, DESK.top + 0.2, 9.98);
     world.add(screen);
-
-    // CASSE ai lati del palco (a terra)
-    for (const sp of SPK) {
-      const cx = (sp.x0 + sp.x1) / 2, w = sp.x1 - sp.x0;
-      const cab = new T.Mesh(new T.BoxGeometry(w, SPK_H, SPK_Z1 - SPK_Z0), m.grill);
-      W(cab, cx, SPK_H / 2, (SPK_Z0 + SPK_Z1) / 2);
-      world.add(cab);
-      for (const [y, r] of [[0.55, 0.42], [1.5, 0.42], [2.45, 0.24], [2.9, 0.12]]) {
-        const cone = new T.Mesh(new T.CylinderGeometry(r, r * 0.8, 0.06, 24), m.cone);
-        cone.rotation.x = Math.PI / 2;
-        W(cone, cx, y, SPK_Z0 - 0.02);
-        world.add(cone);
-      }
-    }
 
     // TRALICCIO: due torri + campata frontale sopra il palco
     const tw = 0.3;
@@ -54757,7 +55043,7 @@ const technoLevel = (function () {
   function routeFor(P) {
     const R = [], d = P.dest;
     const left = d.door || d.x < 0;
-    const gx = left ? -7.95 : 7.95;                  // varco fra la cassa a terra e la torre
+    const gx = left ? -7.95 : 7.95;                  // varco fra il palco e la torre
     const past = left ? P.x < -7.6 : P.x > 7.6;
     if (!past) {
       if (P.z > 6.9 && Math.abs(P.x) < 7.6) R.push({ x: P.x, z: 6.9 });   // un passo indietro dal palco
@@ -54785,7 +55071,7 @@ const technoLevel = (function () {
     if (d < 1e-6) { P.x = cx + r; return; }
     P.x = cx + (dx / d) * r; P.z = cz + (dz / d) * r;
   }
-  // pareti, vano della porta, palco, casse a terra, canestro, torri
+  // pareti, vano della porta, palco, canestro, torri
   function keepOut(P) {
     if (P.z > WALL_Z - 0.3) {
       const lane = DOOR.w / 2 - 0.3;
@@ -54796,7 +55082,6 @@ const technoLevel = (function () {
     P.x = Math.max(-ROOM.x + 0.35, Math.min(ROOM.x - 0.35, P.x));
     if (P.z < ROOM.zNear + 0.4) P.z = ROOM.zNear + 0.4;
     boxOut(P, STAGE.x0, STAGE.x1, STAGE.z0, WALL_Z, 0.3);
-    for (const sp of SPK) boxOut(P, sp.x0, sp.x1, SPK_Z0, SPK_Z1, 0.3);
     circleOut(P, HOOP_X, HOOP_Z + 0.3, 0.75);
     for (const s of [-1, 1]) circleOut(P, s * TOWER_X, TRUSS_Z, 0.42);
   }
@@ -55142,6 +55427,7 @@ const technoLevel = (function () {
     if (ball.z < ROOM.zNear + r) { ball.z = ROOM.zNear + r; if (ball.vz < 0) ball.vz = -ball.vz * e; }
     if (ball.z > ROOM.zFar - r) { ball.z = ROOM.zFar - r; if (ball.vz > 0) ball.vz = -ball.vz * e; }
     if (ball.y > ROOM.h - r) { ball.y = ROOM.h - r; if (ball.vy > 0) ball.vy = -ball.vy * e; }
+    riftEnter(r);                     // portale dello spazio (aperto coi 5 canestri)
     // palco, consolle, casse
     if (ball.z > STAGE.z0 - 0.5) {
       hitBox(STAGE.x0, STAGE.x1, -1, STAGE.h, STAGE.z0, STAGE.z1 + 1, 0.5);
@@ -55153,9 +55439,6 @@ const technoLevel = (function () {
         hitSphereSeg(0, STAGE.h + 0.4, DJ_Z, 0, STAGE.h + 1.45, DJ_Z, 0.21, 0.35);
         hitSphere(0, STAGE.h + 1.72, DJ_Z - 0.05, 0.14, 0.35, 0.3);
       }
-    }
-    if (Math.abs(ball.x) > 5.9 && ball.z > SPK_Z0 - 0.3 && ball.y < SPK_H + 0.3) {
-      for (const sp of SPK) hitBox(sp.x0, sp.x1, 0, SPK_H, SPK_Z0, SPK_Z1, 0.45);
     }
     if (ball.y < TRUSS_Y + 0.3 && ball.y > TRUSS_Y - 0.6 && Math.abs(ball.z - TRUSS_Z) < 0.5) {
       hitSphereSeg(-TOWER_X, TRUSS_Y, TRUSS_Z, TOWER_X, TRUSS_Y, TRUSS_Z, 0.17, 0.4);
@@ -55197,6 +55480,93 @@ const technoLevel = (function () {
     buildSpeakers();
     buildCrowd();
     buildSign();
+    buildRift();
+  }
+
+  /* =========================================================
+     FINE LIVELLO — il VARCO e il portale dello SPAZIO
+     ---------------------------------------------------------
+     Identici a quelli della palestra (21-hub-9 / 21-hub-9c): cambia solo
+     dove sta il portale e cosa si vede nello specchio d'acqua (lo spazio).
+     Chiuso a ogni ingresso; si apre al 5° canestro e porta nello spazio.
+     ========================================================= */
+  let rift = null, opening = null;
+  function buildRift() {
+    rift = makeRiftPortal({
+      dim: { H: ROOM.h, HX: 0, HZ: 0, CH: 0, RIFT: RIFT_AT }, id: "space",
+      view: (size) => spaceLevel.portalView(size),
+      refreshView: () => spaceLevel.refreshPortalView()
+    });
+    opening = makeRiftOpening(rift);
+    rift.build(world, () => true);
+  }
+  // 5° canestro: parte il VARCO (registerBasket non chiude il livello: true)
+  function onComplete() {
+    if (!rift.seaOpen && !opening.active()) opening.start(riftOpened);
+    return true;
+  }
+  // fine della cutscene: portale aperto, canestro sparito (parcheggiato con hoop.x = 0)
+  function riftOpened() {
+    rift.setSeaOpen(true);
+    hoop.x = 0; hoop.y = -80; hoop.z = -60;
+    updateHoopGeometry();
+    hoopGroup.rotation.set(0, 0, 0);
+    hoopGroup.scale.setScalar(HOOP_S);
+    placeHoop();
+    hoopGroup.visible = false;
+    level.goalMakes = 999999;
+    markLevelCompleted(mod.id);          // vittoria vera: i 5 canestri sono fatti
+  }
+  // la palla che attraversa l'acqua andando avanti ci entra e porta nello spazio
+  function riftEnter(r) {
+    if (!rift || !rift.seaOpen || ball.vz <= 0) return;
+    if (ball.z < RIFT_AT.z - r || ball.z > RIFT_AT.z + 0.6) return;
+    const rf = rift.at(ball.x, ball.y, ball.z);
+    if (!rf || rf.taken || level.transitioning) return;
+    rf.taken = true;
+    rift.splash(ball.x, ball.y, ball.z, 1);
+    spawnSparks(ball.x, ball.y, ball.z, 26, false);
+    game.shake = Math.max(game.shake, 1.2);
+    game.fovKick = 1.2;
+    AudioFX.playSwish();
+    runTransition(() => switchLevel(spaceLevel), "");
+  }
+  // durante il varco i tocchi sono consumati (niente tiri), come in palestra
+  function tapScreen() { return !!(opening && opening.active()); }
+
+  /* Visuale del varco: la stessa della palestra (21-level-hub, cameraOverride).
+     normalLook = dove guarderebbe la camera senza cutscene (calcolo del 12-loop). */
+  const _look = new T.Vector3(), _focus = new T.Vector3();
+  function normalLook(out) {
+    const p = camera.position;
+    let dx = camTargetCur.x - p.x, dy = camTargetCur.y - p.y, dz = camTargetCur.z - p.z;
+    const yaw = (game.viewYaw || 0) + baseYaw(), pitch = game.viewPitch || 0;
+    const ca = Math.cos(yaw), sa = Math.sin(yaw);
+    let nx = dx * ca + dz * sa, nz = -dx * sa + dz * ca;
+    const h = Math.hypot(nx, nz);
+    if (h > 1e-6) {
+      const cp = Math.cos(pitch), sp = Math.sin(pitch), nh = h * cp - dy * sp;
+      dy = h * sp + dy * cp;
+      nx *= nh / h; nz *= nh / h;
+    }
+    return out.set(p.x + nx, p.y + dy, p.z + nz);
+  }
+  function cameraOverride() {
+    const w = opening ? opening.camWeight() : 0;
+    if (w <= 0) return false;
+    const sh = game.shake;
+    camera.position.set(
+      CAM_VIEW.x + playerSpot.x + (Math.random() - 0.5) * sh * 0.07,
+      1.70 + CAM_VIEW.y + playerSpot.y + (Math.random() - 0.5) * sh * 0.07,
+      CAM_VIEW.z - playerSpot.z);
+    camera.fov = baseFov(camera.aspect) + game.fovKick * 4;
+    camera.updateProjectionMatrix();
+    const pos = camera.position;
+    normalLook(_look).sub(pos).normalize();
+    opening.focus(_focus).sub(pos).normalize();
+    _look.lerp(_focus, w * w * (3 - 2 * w)).normalize().add(pos);
+    camera.lookAt(_look);
+    return true;
   }
 
   let prevFar = 0;
@@ -55210,7 +55580,10 @@ const technoLevel = (function () {
     camTargetCur.set(CAM_VIEW.lookX, CAM_VIEW.lookY, -4.8);
 
     setSmallHoop(true);
+    hoopGroup.rotation.set(0, 0, 0);
     updateScoreboards();
+    rift.setSeaOpen(false);           // portale dello spazio chiuso: si riapre coi 5 canestri
+    rift.enter();
 
     level.goalMakes = 5;
     lvlT = 0; beatIdx = -1; section = "groove"; barIdx = 0;
@@ -55250,6 +55623,9 @@ const technoLevel = (function () {
   }
 
   function exit() {
+    if (opening.active()) opening.finishNow();   // uscita a metà del varco
+    hoopGroup.rotation.set(0, 0, 0);              // canestro di nuovo dritto e intero per gli altri livelli
+    hoopGroup.visible = true;
     setSmallHoop(false);
     if (world) scene.remove(world);
     if (prevFar && camera.far !== prevFar) { camera.far = prevFar; camera.updateProjectionMatrix(); }
@@ -55270,20 +55646,29 @@ const technoLevel = (function () {
     updateFx(dt, beats, b);
     updateSpeakers(dt, Math.exp(-b * 6));
     updateSign();
+    opening.update(dt);
+    rift.update(dt, lvlT);
   }
 
   /* =========================================================
      REGISTRAZIONE
      ========================================================= */
   const mod = { id: "techno", enter, exit, update, groundAt, collideBall,
+                onComplete, tapScreen, cameraOverride,      // 5° canestro → varco e portale dello spazio
                 get speakers() { return spk; },          // sola lettura (test headless)
                 get partyPeople() { return party ? people : null; },
-                get camView() { return playerSpot.on ? null : CAM_VIEW; } };
+                get camView() { return playerSpot.on ? null : CAM_VIEW; },
+                walkRail: FloorMove.rail(-ROOM.x + 0.7, ROOM.x - 0.7) };   // movimento standard (09c)
   registerLevel(mod);
   // DEV (console / test headless): fa saltare tutte le casse appese → fine della festa
   window.devTechnoPartyOver = function () {
     if (level.current !== mod) return;
     for (const s of spk) if (!s.dead) blowSpeaker(s);
+  };
+  // DEV (console / test headless): fa partire subito il VARCO, come al 5° canestro
+  window.devTechnoRift = function () {
+    if (level.current !== mod || rift.seaOpen) return false;
+    return onComplete();
   };
   return mod;
 })();
@@ -60422,9 +60807,23 @@ function collideSticks() {
    HubRift.setReveal(k, water)       cutscene: portale che cresce (0..1) e acqua che si apre
    HubRift.setTear(tear, glow, arc, shock, flash)  cutscene: squarcio, fulmini, onda d'urto, lampo
    HubRift.seaCenter(out)            centro del portale del mare (coordinate three)
+
+   Lo stesso portale (stessa forma, stessa acqua, stesso contorno, stessa
+   cutscene del VARCO) serve anche ad altri livelli: makeRiftPortal(cfg) ne
+   crea uno nuovo, sempre in modo libero. cfg:
+     dim          misure della sala ({ H, RIFT: { x, z, y, R } } basta in modo libero)
+     id           livello in cui porta (RIFTS[0].id)
+     view(lato)   texture quadrata con la FOTOGRAFIA del livello di arrivo
+     refreshView  la rifà se era rimasta indietro
+   Oggi: HubRift (palestra → mare) e il portale del TECHNO (→ spazio, 20x).
    ============================================================ */
-const HubRift = (function () {
-  const D = HubGym.DIM;
+const HubRift = makeRiftPortal({
+  dim: HubGym.DIM, id: "whale",
+  view: (size) => boatLevel.portalView(size),
+  refreshView: () => boatLevel.refreshPortalView()
+});
+function makeRiftPortal(cfg) {
+  const D = cfg.dim;
   const L = 2 * (D.HZ - D.CH);            // muro dritto fra i due smussi (28 m)
   const HALF = L / 2;
   const HH = D.H - 0.6;                   // fino al cornicione
@@ -60458,7 +60857,7 @@ const HubRift = (function () {
   const SEA_RI = SEA.R - SEA.RING;        // raggio dell'acqua
 
   const RIFTS = [
-    { id: "whale", a: 0x1aa8d8, b: 0x7ff0ff }
+    { id: cfg.id, a: 0x1aa8d8, b: 0x7ff0ff }      // stessi colori per tutti: il portale è uno solo
   ];
   // muro sfondato: intonaco, mattoni, malta (gli stessi colori dei pezzi che fluttuano)
   const WALL_PAL = { plaster: "#bdb6a8", brickA: "#7d4534", brickB: "#a5644a", mortar: "#8b867c" };
@@ -60942,7 +61341,7 @@ const HubRift = (function () {
     if (!FREE) seaG.add(breakM = panel(new T.RingGeometry(SEA.R - SEA.WOB, SEA.R + SEA.EXT, 72, 1),
       material(VERT_BREAK, FRAG_BREAK, UB), SEA.a, SEA.y, 0, 2));
     US = {
-      tView: { value: boatLevel.portalView(TEX_SEA) },      // fotografia del livello vero (15f)
+      tView: { value: cfg.view(TEX_SEA) },                  // fotografia del livello vero (mare: 15f)
       uT, uOpen: { value: 1 }, uLit: { value: 1 }, uDrop: drop(),
       uC1: { value: lin(sea.a) }, uC2: { value: lin(sea.b) }
     };
@@ -60983,7 +61382,7 @@ const HubRift = (function () {
     for (const r of RIFTS) r.taken = false;
     if (!seaOn || !seaG) return;
     US.uOpen.value = 0;
-    boatLevel.refreshPortalView();                  // rifatta qui se il contesto grafico si era perso nel mare
+    cfg.refreshView();                              // rifatta qui se il contesto grafico si era perso nel livello
   }
 
   function update(dt, t) {
@@ -61057,7 +61456,7 @@ const HubRift = (function () {
   return { build, enter, update, setWon, at, splash, RIFTS,
     plane: FREE ? { z: FREE.z } : null,             // modo libero: piano del portale (z fisica)
     prepareSea, setReveal, setTear, setSeaOpen, seaCenter, get seaOpen() { return seaOn; } };
-})();
+}
 /* ============================================================
    HUB — I PEZZI DI MURO CHE FLUTTUANO ATTORNO A UN PORTALE
    ------------------------------------------------------------
@@ -61262,8 +61661,14 @@ const RiftDebris = (function () {
    RiftOpening.camWeight()     0..1, quanto la visuale guarda il portale
    RiftOpening.focus(out)      punto da guardare (three)
    RiftOpening.finishNow()     chiude di colpo (uscita dall'hub a metà)
+
+   makeRiftOpening(rift) crea la stessa identica cutscene per un altro
+   portale (makeRiftPortal, 21-hub-9): oggi la usa anche il TECHNO (20x).
+   Il canestro può essere scalato (techno: piccolo a terra): la scala di
+   partenza si legge da hoopGroup e il risucchio la rispetta.
    ============================================================ */
-const RiftOpening = (function () {
+const RiftOpening = makeRiftOpening(HubRift);
+function makeRiftOpening(HubRift) {
   // durate delle fasi (s)
   const PAUSE = 0.8, CRACK = 1.3, BURST = 0.8, PULL = 2.3, CALM = 1.2;
   const T1 = PAUSE, T2 = T1 + CRACK, T3 = T2 + BURST, T4 = T3 + PULL, T5 = T4 + CALM;
@@ -61273,6 +61678,7 @@ const RiftOpening = (function () {
   const p0 = new T.Vector3();       // posizione del gruppo canestro all'inizio del risucchio
   let on = false, t = 0, onDone = null, built = false, pulled = false, gone = false;
   let x0 = 0, nextArc = 0, rimOff = false;
+  let sc0 = 1;                      // scala del canestro all'inizio (techno: canestro piccolo)
 
   const clamp01 = (v) => Math.max(0, Math.min(1, v));
   const ph = (a, b) => clamp01((t - a) / (b - a));           // avanzamento 0..1 nella finestra [a, b]
@@ -61287,6 +61693,7 @@ const RiftOpening = (function () {
     nextArc = T1 + 0.15;
     HubRift.seaCenter(C);
     x0 = hoop.x;
+    sc0 = hoopGroup.scale.x;
   }
 
   function active() { return on; }
@@ -61326,7 +61733,7 @@ const RiftOpening = (function () {
     const e = Math.pow(u, 2.4);
     const s = 1 - 0.985 * Math.pow(u, 1.4);
     // il centro del canestro (≈ 3,2 m sopra il piede) va a finire nel centro del portale
-    const tx = C.x, ty = C.y - 3.2 * s, tz = C.z;
+    const tx = C.x, ty = C.y - 3.2 * sc0 * s, tz = C.z;
     // spirale attorno alla traiettoria
     const rad = 0.9 * Math.sin(Math.PI * Math.min(1, e * 1.15)), phi = e * 11;
     hoop.x = p0.x + (tx - p0.x) * e;
@@ -61335,7 +61742,7 @@ const RiftOpening = (function () {
     // gira attorno all'asse che punta al muro (z locale) e si allunga verso il portale
     hoopGroup.rotation.z = e * e * 16;
     hoopGroup.rotation.x = Math.sin(e * 9) * 0.35 * (1 - e);
-    hoopGroup.scale.set(s * (1 - 0.35 * u), s * (1 - 0.35 * u), s * (1 + 2.2 * u));
+    hoopGroup.scale.set(sc0 * s * (1 - 0.35 * u), sc0 * s * (1 - 0.35 * u), sc0 * s * (1 + 2.2 * u));
     game.netKick = 1;
   }
 
@@ -61427,7 +61834,7 @@ const RiftOpening = (function () {
   }
 
   return { start, update, active, camWeight, focus, finishNow };
-})();
+}
 /* ============================================================
    HUB DEI PORTALI — il livello centrale del gioco
    ------------------------------------------------------------
@@ -61488,9 +61895,6 @@ const hubLevel = (function () {
   const PORTAL_WY = PORTAL_Y * DECOR_K;
   const PORTAL_WR = PORTAL.R * DECOR_K, PORTAL_HIT = PORTAL.hitR * DECOR_K;
   const RING_R = (PORTAL.R + 0.06) * DECOR_K, RING_TUBE = 0.1 * DECOR_K;
-  /* I sentieri sono lunghi: la spinta del tiro cresce di pari passo, così per
-     arrivare a un portale serve lo stesso gesto di prima. */
-  const LAUNCH_SCALE = 1.35;
   const STEP = 20 * Math.PI / 180;        // angolo fra un sentiero e l'altro
   /* Con tre sentieri: uno dritto e due laterali. I laterali non superano
      ±33° dal punto d'origine = circa 40° visti dalla camera (semi-angolo
@@ -62623,7 +63027,6 @@ const hubLevel = (function () {
     get seaOpen() { return HubRift.seaOpen; },
     camView: CAM_VIEW,
     walkRail: RAIL,                        // camminata (09c): solo lungo il binario, di fronte al canestro
-    launchScale: LAUNCH_SCALE,
     infiniteShots: () => true,
     noFlyingPowerups: true
   };
