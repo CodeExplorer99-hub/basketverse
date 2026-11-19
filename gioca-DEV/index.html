@@ -1684,7 +1684,7 @@ html.q-lite #mainmenu .mm-slots { -webkit-backdrop-filter: none; backdrop-filter
 </head>
 <body>
 <script>
-(function(){var k="bh_build",v="mwmlzgsr";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
+(function(){var k="bh_build",v="mwo3528a";if(typeof localStorage!=="undefined"&&localStorage.getItem(k)!==v){localStorage.setItem(k,v);location.reload(true);}})();
 </script>
 <!-- Icone in alto a sinistra. Il blocco marcato ▼▼▼…▲▲▲ è SOLO dev e viene tolto
      da strip-dev.mjs nella build consegnata. -->
@@ -36421,9 +36421,10 @@ const boatLevel = (function () {
      Appena parte la boss fight il barile si rompe (startFinale, 15c) e al
      suo posto CADE un'ANCORA grande, legata con una CATENA a maglie con
      traversino che esce da una cubia sul capo di banda della prua.
-     - Modello: ancora "ammiragliato" in ferro battuto arrugginito: fuso
-       rastremato, diamante, marre ad arco con palme e unghie, ceppo
-       trasversale con le palle in punta, occhio e cicala (anello).
+     - Modello (2026-11-18, richiesta utente): RAMPINO a 4 ganci a croce in
+       ferro battuto arrugginito: fuso rastremato, diamante, 4 ganci ad arco
+       (visti dall'alto fanno una +) con palme e unghie affusolate, occhio e
+       cicala (anello). Disegnato a 1,5 m e rimpicciolito del 50% (ANC.SCALE).
      - Fisica: CORPO RIGIDO vero (XPBD a sotto-passi): gravità, inerzia,
        rotazione, contatti a punti campione con attrito e un filo di
        rimbalzo contro ponte / fondo scafo / murata / capo di banda,
@@ -36436,8 +36437,16 @@ const boatLevel = (function () {
        e la trascini: il punto preso insegue il dito su un piano rivolto
        alla camera con una presa elastica (pesa, dondola). Lasciata col
        gesto, VOLA con la velocità del dito (un colpo verso l'alto la
-       manda anche in avanti). RANGE ILLIMITATO per ora: mentre la tieni
-       o vola la catena si srotola libera dalla cubia (ANC.MAX_LEN).
+       manda anche in avanti).
+     - MORSETTO (2026-11-19, richiesta utente): la base della catena è
+       stretta da un morsetto sulla cubia. Finché tiene, l'ancora (baricentro)
+       non esce da una sfera di ANC.CLAMP_R = 2 m attorno al suo punto di
+       comparsa (solidale alla barca) e la catena non fila oltre ancClampLen.
+       Si ROMPE solo caricando all'indietro (dito trascinato giù verso di sé
+       di almeno BREAK_WIND schermi) e poi lanciando in avanti di scatto
+       (dito su a ≥ BREAK_SPEED schermi/s per ≥ BREAK_TRAVEL): la ganascia
+       vola via, la catena si srotola libera dalla cubia (ANC.MAX_LEN) e
+       l'ancora si lancia. Resta rotto fino alla prossima boss fight.
      - Finita in mare: il verricello la ritira fino alla cubia. Ferma sul
        ponte: ritira solo la catena lasca in più (resta ordinata).
      A cosa serve: lo dirà l'utente (per ora è solo l'oggetto fisico).
@@ -36446,9 +36455,10 @@ const boatLevel = (function () {
      (collideBall, 15c).
      ========================================================= */
   const ANC = {
-    M: 200,                        // massa (kg): ancora da ~1,5 m in ferro pieno
-    I: [34, 9, 38],                // inerzia principale attorno al baricentro (assi del corpo)
-    COM_Y: 0.49,                   // baricentro sopra il diamante (coord. modello)
+    SCALE: 0.5,                    // il modello è disegnato a grandezza 1,5 m e rimpicciolito del 50%
+    M: 42,                         // massa (kg): rampino da ~0,75 m in ferro pieno
+    I: [1.9, 1.1, 1.9],            // inerzia principale attorno al baricentro (assi del corpo, già in scala)
+    COM_Y: 0.29,                   // baricentro sopra il diamante (coord. modello, prima della scala)
     SUB: 8,                        // sotto-passi di fisica per frame
     G: 9.81,
     MU_BOAT: 0.55, MU_SKIN: 0.35,  // attrito ferro/legno, ferro/pelle
@@ -36465,7 +36475,11 @@ const boatLevel = (function () {
     SPAWN_T: 0.35,                 // secondi dopo la rottura del barile
     THROW_K: 1.25,                 // il lancio prende la velocità del dito × THROW_K...
     THROW_FWD: 1.5,                // ...e la parte verso l'alto spinge anche in avanti
-    THROW_MAX: 26
+    THROW_MAX: 26,
+    CLAMP_R: 2.0,                  // morsetto intero: raggio di movimento attorno allo spawn (m)
+    BREAK_WIND: 0.08,              // carica: dito trascinato giù di almeno l'8% dello schermo...
+    BREAK_TRAVEL: 0.14,            // ...poi su di almeno il 14% dello schermo...
+    BREAK_SPEED: 1.8               // ...a ≥ 1,8 altezze di schermo al secondo (scatto)
   };
   // capo della catena: foro della cubia sul capo di banda di prua (coord. locali della barca)
   const ANC_FAIR_L = new T.Vector3(0, 0.775, -3.70);
@@ -36478,22 +36492,23 @@ const boatLevel = (function () {
   const ANC_WALL_T = 0.07, ANC_HULL_BEVEL = 0.12;
   const ANC_PULL_MAX = 4.0;          // velocità massima con cui la catena tesa trascina l'ancora (m/s)
 
-  // punti di contatto del corpo (coord. modello: diamante a y=0, fuso lungo +y,
-  // marre nel piano XY, ceppo lungo Z) + raggio
+  // i 4 ganci del rampino: direzioni radiali a croce (piano XZ) e lato di ognuno
+  const ANC_HOOK_DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+  // punti di contatto del corpo (coord. modello prima della scala: diamante a
+  // y=0, fuso lungo +y, ganci lungo ±X e ±Z) + raggio
   const ANC_PTS = (() => {
     const out = [
       [0, 1.505, 0, 0.035],          // cicala (in cima)
       [0, 1.25, 0, 0.06],            // occhio
-      [0, 1.06, 0.565, 0.05],        // palle del ceppo
-      [0, 1.06, -0.565, 0.05],
-      [0, 0.66, 0, 0.06],            // fuso
+      [0, 0.98, 0, 0.055],           // fuso alto
+      [0, 0.6, 0, 0.06],             // fuso
       [0, 0.035, 0, 0.08]            // diamante
     ];
-    for (const s of [-1, 1]) {
-      out.push([s * 0.339, 0.125, 0, 0.05]);      // marra
-      out.push([s * 0.568, 0.425, 0, 0.02]);      // unghia
-      out.push([s * 0.51, 0.296, 0.15, 0.02]);    // spigoli delle palme
-      out.push([s * 0.51, 0.296, -0.15, 0.02]);
+    for (const [dx, dz] of ANC_HOOK_DIRS) {
+      out.push([dx * 0.339, 0.125, dz * 0.339, 0.05]);     // gancio
+      out.push([dx * 0.568, 0.425, dz * 0.568, 0.025]);    // unghia
+      out.push([dx * 0.51 - dz * 0.15, 0.296, dz * 0.51 + dx * 0.15, 0.025]);   // spigoli della palma
+      out.push([dx * 0.51 + dz * 0.15, 0.296, dz * 0.51 - dx * 0.15, 0.025]);
     }
     return out;
   })();
@@ -36510,6 +36525,9 @@ const boatLevel = (function () {
     planeN: new T.Vector3(), planeD: 0, hist: [],
     flying: false, flyT: 0, hauling: false, sleep: false, still: 0,
     boatContact: false, whaleContact: false, prevY: 0, impact: 0, sndCD: 0,
+    // morsetto
+    clamped: true, clampLen: 0, clampBase: null, clampTop: null, clampFly: null,
+    spawnW: new T.Vector3(), limitHit: 0, sy0: 0, syMax: 0, sHist: [],
     // catena
     X: null, P: null, C: null, n: 0, firstLen: 0, maxN: 0
   };
@@ -36523,7 +36541,7 @@ const boatLevel = (function () {
   const _sd = { sd: 0, nx: 0, nz: 0 }, _sdD = { sd: 0, nx: 0, nz: 0 }, _sdH = { sd: 0, nx: 0, nz: 0 };
   const _ray = new T.Raycaster();
   const _contacts = [];
-  for (let i = 0; i < 16; i++) _contacts.push({ r: new T.Vector3(), n: new T.Vector3(), lam: 0, vnPre: 0, mu: 0.5 });
+  for (let i = 0; i < 24; i++) _contacts.push({ r: new T.Vector3(), n: new T.Vector3(), lam: 0, vnPre: 0, mu: 0.5 });
   let _polyD = null, _polyH = null, _cPolyD = null, _cPolyH = null;
   let _boatPrevOk = false;
 
@@ -36619,31 +36637,31 @@ const boatLevel = (function () {
     return out;
   }
 
-  // arco delle marre: da unghia a unghia passando per il diamante (piano XY)
+  // gancio del rampino: dal diamante all'unghia lungo un arco nel piano (dir, Y)
   const ANC_ARC_C = 0.62, ANC_ARC_R = 0.6, ANC_ARC_PHI = 1.24;
-  class AnchorArc extends T.Curve {
+  class AnchorHook extends T.Curve {
+    constructor(dx, dz) { super(); this.dx = dx; this.dz = dz; }
     getPoint(t, target) {
       const p = target || new T.Vector3();
-      const f = (2 * t - 1) * ANC_ARC_PHI;
-      return p.set(ANC_ARC_R * Math.sin(f), ANC_ARC_C - ANC_ARC_R * Math.cos(f), 0);
+      const f = t * ANC_ARC_PHI, rr = ANC_ARC_R * Math.sin(f);
+      return p.set(this.dx * rr, ANC_ARC_C - ANC_ARC_R * Math.cos(f), this.dz * rr);
     }
   }
 
   function buildAnchorModel(mat) {
     const G = [];
     const add = (g) => { G.push(g); return g; };
-    // FUSO: rastremato verso l'occhio, sezione appena schiacciata
-    add(new T.CylinderGeometry(0.042, 0.058, 1.16, 22, 6).scale(1, 1, 0.82).translate(0, 0.62, 0));
-    // DIAMANTE: raccordo fuso/marre
-    add(new T.SphereGeometry(0.085, 22, 14).scale(1.35, 0.85, 0.82).translate(0, 0.035, 0));
-    // MARRE: un arco solo, grosso al diamante e affilato in punta (unghie)
-    const rAt = (t) => {
-      const u = Math.abs(2 * t - 1);
+    // FUSO: rastremato verso l'occhio
+    add(new T.CylinderGeometry(0.042, 0.058, 1.16, 22, 6).translate(0, 0.62, 0));
+    // DIAMANTE: raccordo fuso/ganci (tondo: 4 ganci a croce)
+    add(new T.SphereGeometry(0.095, 22, 14).scale(1, 0.8, 1).translate(0, 0.035, 0));
+    // 4 GANCI a croce, grossi al diamante e affilati in punta (unghie)
+    const rAt = (u) => {
       const base = 0.06 - 0.028 * u;
       return u < 0.86 ? base : base * (1 - Math.pow((u - 0.86) / 0.14, 1.2) * 0.86);
     };
-    add(taperedTube(new AnchorArc(), rAt, 72, 16, 4, 1));
-    // PALME: piastre a vanga sulle marre, larghe nella direzione del ceppo
+    for (const [dx, dz] of ANC_HOOK_DIRS) add(taperedTube(new AnchorHook(dx, dz), rAt, 40, 16, 2, 1));
+    // PALME: piastre a vanga sui ganci, larghe di traverso al gancio
     const sh = new T.Shape();
     sh.moveTo(-0.15, -0.03);
     sh.quadraticCurveTo(-0.03, -0.155, 0.07, -0.15);
@@ -36652,42 +36670,26 @@ const boatLevel = (function () {
     sh.quadraticCurveTo(-0.03, 0.155, -0.15, 0.03);
     sh.closePath();
     const FL_PHI = 0.89;
-    for (const s of [-1, 1]) {
+    const cx = ANC_ARC_R * Math.sin(FL_PHI), cy = ANC_ARC_C - ANC_ARC_R * Math.cos(FL_PHI);
+    for (const [dx, dz] of ANC_HOOK_DIRS) {
       const g = new T.ExtrudeGeometry(sh, { depth: 0.022, bevelEnabled: true, bevelThickness: 0.008,
         bevelSize: 0.008, bevelSegments: 2, curveSegments: 10 });
       g.translate(0, 0, -0.011);
-      const f = s * FL_PHI;
-      const cx = ANC_ARC_R * Math.sin(f), cy = ANC_ARC_C - ANC_ARC_R * Math.cos(f);
-      // tangente verso l'unghia
-      const tx = s * Math.cos(f), ty = s * Math.sin(f);
-      const X = new T.Vector3(tx, ty, 0).normalize(), Y = new T.Vector3(0, 0, 1);
+      // X = tangente verso l'unghia, Y = di traverso al gancio
+      const X = new T.Vector3(dx * Math.cos(FL_PHI), Math.sin(FL_PHI), dz * Math.cos(FL_PHI)).normalize();
+      const Y = new T.Vector3(-dz, 0, dx);
       const Z = new T.Vector3().crossVectors(X, Y);
-      g.applyMatrix4(new T.Matrix4().makeBasis(X, Y, Z).setPosition(cx, cy, 0));
+      g.applyMatrix4(new T.Matrix4().makeBasis(X, Y, Z).setPosition(dx * cx, cy, dz * cx));
       add(g);
     }
+    // collare in cima al diamante, dove il fuso si innesta sui ganci
+    add(new T.CylinderGeometry(0.064, 0.072, 0.07, 22).translate(0, 0.12, 0));
     // OCCHIO in cima al fuso (foro lungo Z) e CICALA che ci passa dentro
     add(new T.TorusGeometry(0.05, 0.027, 12, 26).translate(0, 1.248, 0));
     add(new T.TorusGeometry(0.13, 0.024, 14, 44).rotateY(Math.PI / 2).translate(0, 1.375, 0));
-    // CEPPO: barra trasversale rastremata verso le punte, con le palle
-    const prof = [];
-    const SL = 0.545;
-    prof.push(new T.Vector2(0.001, -SL));
-    for (let i = 0; i <= 16; i++) {
-      const y = -SL + (i / 16) * 2 * SL, u = y / SL;
-      prof.push(new T.Vector2(0.026 + 0.016 * (1 - u * u), y));
-    }
-    prof.push(new T.Vector2(0.001, SL));
-    add(new T.LatheGeometry(prof, 20).rotateX(Math.PI / 2).translate(0, 1.06, 0));
-    for (const s of [-1, 1]) {
-      add(new T.SphereGeometry(0.046, 18, 12).translate(0, 1.06, s * 0.565));
-      // spallamenti del ceppo ai lati del fuso
-      add(new T.TorusGeometry(0.037, 0.011, 8, 20).translate(0, 1.06, s * 0.085));
-    }
-    // collare del fuso dove passa il ceppo + chiavetta (zeppa) di fermo
-    add(new T.CylinderGeometry(0.066, 0.066, 0.12, 22).scale(1, 1, 0.9).translate(0, 1.06, 0));
-    add(new T.BoxGeometry(0.014, 0.07, 0.03).translate(0.068, 1.06, 0.11));
     const geo = anchorMerge(G);
     geo.translate(0, -ANC.COM_Y, 0);          // origine = baricentro (asse del corpo rigido)
+    geo.scale(ANC.SCALE, ANC.SCALE, ANC.SCALE);
     geo.computeBoundingSphere();
     const mesh = new T.Mesh(geo, mat);
     mesh.receiveShadow = true;
@@ -36731,6 +36733,60 @@ const boatLevel = (function () {
     return m;
   }
 
+  // MORSETTO a C sulla cubia: due guance fisse ai lati dell'occhio + ganascia
+  // superiore (traversa, vite di serraggio con manetta a T, dadi) che preme
+  // la catena. Quando si rompe la ganascia vola via (A.clampTop).
+  const ANC_CLAMP_TOP_P = new T.Vector3(0, 0.175, 0);   // perno della ganascia (sopra lo zoccolo)
+  function buildClamp(mat) {
+    const base = new T.Mesh(anchorMerge([
+      new T.BoxGeometry(0.028, 0.15, 0.075).translate(0.104, 0.085, 0),
+      new T.BoxGeometry(0.028, 0.15, 0.075).translate(-0.104, 0.085, 0)
+    ]), mat);
+    const top = new T.Mesh(anchorMerge([
+      new T.BoxGeometry(0.236, 0.034, 0.085),
+      new T.CylinderGeometry(0.012, 0.012, 0.13, 10).translate(0, 0.02, 0),
+      new T.CylinderGeometry(0.008, 0.008, 0.15, 8).rotateZ(Math.PI / 2).translate(0, 0.088, 0),
+      new T.CylinderGeometry(0.019, 0.019, 0.022, 6).translate(0.104, 0.027, 0),
+      new T.CylinderGeometry(0.019, 0.019, 0.022, 6).translate(-0.104, 0.027, 0)
+    ]), mat);
+    const grp = new T.Group();
+    grp.position.set(ANC_FAIR_L.x, ANC_RAIL, ANC_FAIR_L.z);
+    top.position.copy(ANC_CLAMP_TOP_P);
+    base.receiveShadow = top.receiveShadow = true;
+    grp.add(base, top);
+    grp.visible = false;
+    return { grp, top };
+  }
+  function clampRestore() {
+    const A = anchor;
+    A.clamped = true; A.clampFly = null;
+    if (A.clampTop) { A.clampTop.visible = true; A.clampTop.position.copy(ANC_CLAMP_TOP_P); A.clampTop.rotation.set(0, 0, 0); }
+  }
+  // rottura: la ganascia salta via, la catena fila libera
+  function clampBreak() {
+    const A = anchor;
+    if (!A.clamped) return;
+    A.clamped = false;
+    const s = Math.random() < 0.5 ? -1 : 1;
+    A.clampFly = { t: 0, v: new T.Vector3(s * (0.8 + Math.random() * 0.8), 3.2, 1.2 + Math.random()),
+      w: new T.Vector3(7 + Math.random() * 5, 3, s * (9 + Math.random() * 6)) };
+    _av1.copy(ANC_FAIR_L).applyMatrix4(boatGroup.matrixWorld);
+    spawnSparks(_av1.x, _av1.y + 0.1, -_av1.z, 34, false);
+    AudioFX.playRim(1.0);
+    AudioFX.playBoard(0.8);
+    game.shake = Math.max(game.shake, 0.3);
+    Haptics.pulse(140);
+  }
+  function updateClampFly(dt) {
+    const A = anchor, F = A.clampFly;
+    if (!F || !A.clampTop.visible) return;
+    F.t += dt;
+    F.v.y -= ANC.G * dt;
+    A.clampTop.position.addScaledVector(F.v, dt);
+    A.clampTop.rotation.x += F.w.x * dt; A.clampTop.rotation.y += F.w.y * dt; A.clampTop.rotation.z += F.w.z * dt;
+    if (F.t > 1.4) A.clampTop.visible = false;
+  }
+
   function buildAnchor() {
     const A = anchor;
     const tx = anchorIronMaps();
@@ -36747,6 +36803,9 @@ const boatLevel = (function () {
     A.fair = buildFairlead(mat);
     A.fair.visible = false;
     boatGroup.add(A.fair);
+    const cl = buildClamp(mat);
+    A.clampBase = cl.grp; A.clampTop = cl.top;
+    boatGroup.add(A.clampBase);
     // catena: una InstancedMesh di maglie, quante ne servono alla lunghezza attuale
     A.maxLinks = Math.ceil(ANC.MAX_LEN / ANC.LINK_P) + 4;
     A.chain = new T.InstancedMesh(buildChainLinkGeo(), mat, A.maxLinks);
@@ -36757,9 +36816,10 @@ const boatLevel = (function () {
     world.add(A.chain);
     // fisica
     A.Iinv.set(1 / ANC.I[0], 1 / ANC.I[1], 1 / ANC.I[2]);
-    A.pts = ANC_PTS.map((p) => ({ l: new T.Vector3(p[0], p[1] - ANC.COM_Y, p[2]), r: p[3] }));
+    const S = ANC.SCALE;
+    A.pts = ANC_PTS.map((p) => ({ l: new T.Vector3(p[0], p[1] - ANC.COM_Y, p[2]).multiplyScalar(S), r: Math.max(0.012, p[3] * S) }));
     A.wpts = A.pts.map(() => new T.Vector3());
-    A.ring.set(ANC_RING_M[0], ANC_RING_M[1] - ANC.COM_Y, ANC_RING_M[2]);
+    A.ring.set(ANC_RING_M[0], ANC_RING_M[1] - ANC.COM_Y, ANC_RING_M[2]).multiplyScalar(S);
     A.maxN = Math.ceil(ANC.MAX_LEN / ANC.SEG) + 3;
     A.X = new Float32Array(A.maxN * 3);
     A.P = new Float32Array(A.maxN * 3);
@@ -37015,7 +37075,12 @@ const boatLevel = (function () {
         _aFair.z + (_av2.z - _aFair.z) * f);
       A.C[i] = 0;
     }
-    A.grp.visible = true; A.chain.visible = true; A.fair.visible = true;
+    // morsetto chiuso: catena lunga quanto basta a raggiungere tutta la sfera
+    // di CLAMP_R attorno allo spawn (+ braccio dell'anello + un filo di lasco)
+    clampRestore();
+    A.spawnW.copy(A.pos); A.limitHit = 0;
+    A.clampLen = ANC_FAIR_L.distanceTo(ANC_SPAWN_L) + ANC.CLAMP_R + A.ring.length() + 0.4;
+    A.grp.visible = true; A.chain.visible = true; A.fair.visible = true; A.clampBase.visible = true;
     A.grp.position.copy(A.pos); A.grp.quaternion.copy(A.q);
     for (let i = 0; i < A.pts.length; i++) A.wpts[i].copy(A.pts[i].l).applyQuaternion(A.q).add(A.pos);
     _bPrev.copy(boatGroup.matrixWorld); boatGroup.getWorldQuaternion(_bqPrev); _boatPrevOk = true;
@@ -37027,7 +37092,9 @@ const boatLevel = (function () {
   function resetAnchor() {
     const A = anchor;
     A.on = false; A.spawned = false; A.held = false; A.flying = false; A.hauling = false; A.sleep = false;
-    A.n = 0; A.hist.length = 0; _boatPrevOk = false;
+    A.n = 0; A.hist.length = 0; A.sHist.length = 0; _boatPrevOk = false;
+    clampRestore();
+    if (A.clampBase) A.clampBase.visible = false;
     if (A.grp) A.grp.visible = false;
     if (A.chain) { A.chain.visible = false; A.chain.count = 0; }
     if (A.fair) A.fair.visible = false;
@@ -37037,7 +37104,7 @@ const boatLevel = (function () {
   function ancStep(h) {
     const A = anchor, S = ANC.SEG, X = A.X, P = A.P, n = A.n;
     const wn = 1 / ANC.NODE_M;
-    const paying = A.held || A.flying;
+    const paying = !A.clamped && (A.held || A.flying);   // col morsetto la catena non fila
 
     // --- corpo: forze e previsione ---
     if (!A.sleep) {
@@ -37061,6 +37128,18 @@ const boatLevel = (function () {
           const k = ANC.M * Math.pow(2 * Math.PI * ANC.GRAB_HZ, 2);
           const lam = C / (ancW(_ar, _an) + 1 / (k * h * h));
           ancPosImp(_an.multiplyScalar(-lam), _ar);
+        }
+      }
+      // morsetto chiuso: il baricentro non esce dalla sfera attorno allo spawn
+      // (correzione di sola traslazione: la velocità verso fuori sparisce da sé)
+      if (A.clamped) {
+        _av1.copy(A.pos).sub(A.spawnW);
+        const d = _av1.length();
+        if (d > ANC.CLAMP_R) {
+          _av1.multiplyScalar(1 / d);
+          const vOut = A.v0.dot(_av1);            // arrivava di slancio (non: già appoggiata al limite)
+          if (vOut > A.limitHit) A.limitHit = vOut;
+          A.pos.addScaledVector(_av1, ANC.CLAMP_R - d);
         }
       }
     }
@@ -37249,6 +37328,8 @@ const boatLevel = (function () {
     _bPrev.copy(_bM); _bqPrev.copy(_bq); _boatPrevOk = true;
     _bInv.copy(_bM).invert();
     _aFair.copy(ANC_FAIR_L).applyMatrix4(_bM);
+    A.spawnW.copy(ANC_SPAWN_L).applyMatrix4(_bM);     // centro della sfera del morsetto (viaggia con la barca)
+    updateClampFly(dt);
 
     // il cannone si prende il dito: l'ancora cade dove sta
     if (A.held && (game.cannonMode || cannonCtl.phase !== "off")) { A.held = false; A.hist.length = 0; }
@@ -37260,7 +37341,9 @@ const boatLevel = (function () {
     if (A.held || A.flying) {
       A.hauling = false;
       // lasco abbondante: la catena che vola dietro non frena il lancio
-      const need = dist * 1.12 + 0.4;
+      // (col morsetto chiuso non fila oltre la sua lunghezza)
+      let need = dist * 1.12 + 0.4;
+      if (A.clamped) need = Math.min(need, A.clampLen);
       if (tot < need) chainGrow(need - tot);
     } else {
       if (A.pos.y < -0.25) A.hauling = true;
@@ -37274,9 +37357,16 @@ const boatLevel = (function () {
       }
     }
 
-    A.impact = 0;
+    A.impact = 0; A.limitHit = 0;
     const h = dt / ANC.SUB;
     for (let s = 0; s < ANC.SUB; s++) ancStep(h);
+
+    // strattone sul morsetto: la catena si tende di colpo
+    if (A.clamped && A.limitHit > 1.5 && A.sndCD <= 0) {
+      AudioFX.playRim(Math.min(0.6, A.limitHit * 0.08));
+      game.shake = Math.max(game.shake, Math.min(0.12, A.limitHit * 0.02));
+      A.sndCD = 0.15;
+    }
 
     // tonfi sul legno / tonfo in acqua
     A.sndCD = Math.max(0, A.sndCD - dt);
@@ -37369,7 +37459,22 @@ const boatLevel = (function () {
     A.target.copy(hit);
     A.hist.length = 0;
     A.hist.push({ t: performance.now(), x: hit.x, y: hit.y, z: hit.z });
+    A.sy0 = A.syMax = p.y;
+    A.sHist.length = 0;
+    A.sHist.push({ t: performance.now(), y: p.y });
     return true;
+  }
+  // carica all'indietro (dito giù, verso di sé) + scatto in avanti (dito su veloce) → il morsetto salta
+  function ancCheckBreak() {
+    const A = anchor, sh = A.sHist;
+    if (!A.clamped || sh.length < 2) return;
+    const H = window.innerHeight || 1;
+    if ((A.syMax - A.sy0) / H < ANC.BREAK_WIND) return;           // non ha caricato
+    const a = sh[0], b = sh[sh.length - 1];
+    if ((A.syMax - b.y) / H < ANC.BREAK_TRAVEL) return;           // non ha lanciato abbastanza
+    const span = (b.t - a.t) / 1000;
+    if (span < 0.015) return;
+    if ((a.y - b.y) / H / span >= ANC.BREAK_SPEED) clampBreak();
   }
   function anchorGrabMove(p) {
     const A = anchor;
@@ -37384,6 +37489,12 @@ const boatLevel = (function () {
     const now = performance.now();
     A.hist.push({ t: now, x: A.target.x, y: A.target.y, z: A.target.z });
     while (A.hist.length > 2 && now - A.hist[0].t > 100) A.hist.shift();
+    if (A.clamped) {
+      if (p.y > A.syMax) A.syMax = p.y;
+      A.sHist.push({ t: now, y: p.y });
+      while (A.sHist.length > 2 && now - A.sHist[0].t > 90) A.sHist.shift();
+      ancCheckBreak();
+    }
   }
   function anchorGrabUp() {
     const A = anchor;
@@ -37405,7 +37516,7 @@ const boatLevel = (function () {
       A.v.copy(_av1);
     }
     if (A.v.length() > 3) { A.flying = true; A.flyT = 0; }
-    h.length = 0;
+    h.length = 0; A.sHist.length = 0;
   }
   function anchorHeld() { return anchor.held; }
 
